@@ -143,14 +143,24 @@ jobs:
 
       - name: Smoke test
         run: |
-          # Test the binary can compile a simple program (LLVM bin is on GITHUB_PATH)
-          'fun main() { println("CI OK") }' | Set-Content -Path $env:TEMP\test.at -Encoding ASCII
-          $output = & .\target\release\atomic.exe build --target native $env:TEMP\test.at --emit obj -o $env:TEMP\test.o 2>&1
+          # Copy DLL so atomic.exe can find it
+          Copy-Item "$env:LLVM_SYS_201_PREFIX\bin\LLVM-C.dll" target/release/
+          # Verify binary runs
+          Write-Host "Testing atomic.exe..."
+          $helpOut = & .\target\release\atomic.exe --help 2>&1
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "Compiler failed (exit $LASTEXITCODE): $output"
+            Write-Error "atomic.exe --help failed (exit $LASTEXITCODE): $helpOut"
             exit 1
           }
-          Write-Host $output
+          Write-Host "atomic.exe OK"
+          # Test the binary can compile a simple program
+          'fun main() { println("CI OK") }' | Set-Content -Path $env:TEMP\test.at -Encoding ASCII
+          $out = & .\target\release\atomic.exe build --target native $env:TEMP\test.at --emit obj -o $env:TEMP\test.o 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Compiler failed (exit $LASTEXITCODE): $out"
+            exit 1
+          }
+          Write-Host $out
           Write-Host "Windows binary OK"
 
       - name: Bundle DLL dependencies
