@@ -144,9 +144,9 @@ jobs:
       - name: Smoke test
         run: |
           # Test the binary can compile a simple program (LLVM bin is on GITHUB_PATH)
-          echo 'fun main() { println("CI OK") }' > $env:TEMP\test.at
+          'fun main() { println("CI OK") }' | Out-File -Encoding UTF8 $env:TEMP\test.at
           .\target\release\atomic.exe build --target native $env:TEMP\test.at --emit obj -o $env:TEMP\test.o
-          echo "Windows binary OK"
+          Write-Host "Windows binary OK"
 
       - name: Bundle DLL dependencies
         run: |
@@ -160,7 +160,7 @@ jobs:
           Copy-Item -Recurse "stdlib" "$distDir\stdlib"
           # Create zip
           Compress-Archive -Path "$distDir\*" -DestinationPath "atomic-windows-x64.zip"
-          ls -lh atomic-windows-x64.zip
+          Get-Item atomic-windows-x64.zip | Select-Object Name, Length
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
