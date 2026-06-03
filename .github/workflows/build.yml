@@ -133,11 +133,7 @@ jobs:
           # Create a stub if missing (our compiler doesn't use XML features).
           if (-not (Test-Path "C:\llvm\lib\libxml2s.lib")) {
             Write-Host "Creating stub libxml2s.lib..."
-            $msvcTools = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
-            $libExe = Get-ChildItem $msvcTools -Recurse -Filter "lib.exe" -Depth 3 -ErrorAction SilentlyContinue | Where-Object { $_.Directory.Name -eq "x64" } | Select-Object -First 1
-            if (-not $libExe) { throw "Cannot find lib.exe to create stub library" }
-            Write-Host "Using: $($libExe.FullName)"
-            & $libExe.FullName /OUT:C:\llvm\lib\libxml2s.lib /MACHINE:X64
+            lib /OUT:C:\llvm\lib\libxml2s.lib /MACHINE:X64
           }
           cargo build --release --no-default-features --features codegen-windows
           Get-ChildItem target/release/atomic.exe
