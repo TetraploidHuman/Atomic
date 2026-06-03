@@ -93,77 +93,34 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $llvmVersion = "20.1.0"
+          $archiveName = "clang+llvm-$llvmVersion-x86_64-pc-windows-msvc"
+          $archiveUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/$archiveName.tar.xz"
 
-          # Try portable archive first (more reliable in CI than NSIS installer)
-          $archiveUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/clang+llvm-$llvmVersion-x86_64-pc-windows-msvc.tar.xz"
-          $archiveFile = "$env:TEMP\llvm.tar.xz"
-          $llvmPath = $null
+          Write-Host "Downloading $archiveName.tar.xz..."
+          # curl.exe handles GitHub's redirect chain better than Invoke-WebRequest
+          curl.exe -sSL -o C:\llvm.tar.xz $archiveUrl
 
-          try {
-            Write-Host "Downloading LLVM portable archive..."
-            Invoke-WebRequest -Uri $archiveUrl -OutFile $archiveFile -ErrorAction Stop
-            Write-Host "Extracting with tar..."
-            New-Item -Force -ItemType Directory -Path "C:\llvm-tmp"
-            tar -xf $archiveFile -C "C:\llvm-tmp"
-            # tar creates a top-level dir like clang+llvm-20.1.0-x86_64-pc-windows-msvc
-            $extracted = Get-ChildItem "C:\llvm-tmp" -Directory | Select-Object -First 1
-            if ($extracted) {
-              Move-Item $extracted.FullName "C:\llvm"
-            } else {
-              Move-Item "C:\llvm-tmp" "C:\llvm"
-            }
-            Remove-Item "C:\llvm-tmp" -Recurse -Force -ErrorAction SilentlyContinue
-            Remove-Item $archiveFile -Force
-            if (Test-Path "C:\llvm\bin\llvm-config.exe") {
-              $llvmPath = "C:\llvm"
-            }
-          } catch {
-            Write-Host "Archive approach failed: $_"
+          Write-Host "Extracting..."
+          New-Item -Force -ItemType Directory -Path C:\llvm-extract | Out-Null
+          tar -xf C:\llvm.tar.xz -C C:\llvm-extract
+          Remove-Item C:\llvm.tar.xz -Force
+
+          # tar extracts into a subdirectory, move contents to C:\llvm
+          $innerDir = Get-ChildItem C:\llvm-extract -Directory | Select-Object -First 1
+          if ($innerDir) {
+            Move-Item $innerDir.FullName C:\llvm -Force
+          } else {
+            Rename-Item C:\llvm-extract C:\llvm -Force
+          }
+          Remove-Item C:\llvm-extract -Recurse -Force -ErrorAction SilentlyContinue
+
+          if (-not (Test-Path "C:\llvm\bin\llvm-config.exe")) {
+            Write-Host "Contents of C:\llvm:"
+            Get-ChildItem C:\llvm -Depth 1 | ForEach-Object { Write-Host "  $_" }
+            throw "llvm-config.exe not found in C:\llvm\bin"
           }
 
-          # Fallback: NSIS installer
-          if (-not $llvmPath) {
-            Write-Host "Falling back to NSIS installer..."
-            $llvmInstaller = "$env:TEMP\LLVM-installer.exe"
-            Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-win64.exe" -OutFile $llvmInstaller
-
-            # Check if we got a real PE or an HTML error page
-            $firstBytes = [System.IO.File]::ReadAllBytes($llvmInstaller)[0..1]
-            if ($firstBytes[0] -ne 77 -or $firstBytes[1] -ne 90) {
-              Write-Host "ERROR: downloaded file is not a PE executable (first bytes: $firstBytes)"
-              Write-Host "Content preview:"
-              Get-Content $llvmInstaller -TotalCount 5 -ErrorAction SilentlyContinue
-              throw "Download did not yield a valid Windows executable"
-            }
-
-            $proc = Start-Process -PassThru -Wait -FilePath $llvmInstaller -ArgumentList "/S"
-            Write-Host "Installer exit code: $($proc.ExitCode)"
-            Remove-Item $llvmInstaller -Force
-
-            $candidates = @(
-              "C:\Program Files\LLVM",
-              "C:\LLVM"
-            )
-            foreach ($p in $candidates) {
-              if (Test-Path "$p\bin\llvm-config.exe") { $llvmPath = $p; break }
-            }
-            if (-not $llvmPath) {
-              Write-Host "Searching for llvm-config.exe..."
-              $found = Get-ChildItem "C:\Program Files" -Recurse -Filter "llvm-config.exe" -Depth 5 -ErrorAction SilentlyContinue | Select-Object -First 1
-              if ($found) {
-                $llvmPath = Split-Path -Parent (Split-Path -Parent $found.FullName)
-              } else {
-                # Dump LLVM dir contents for debugging
-                $llvmDir = "C:\Program Files\LLVM"
-                if (Test-Path $llvmDir) {
-                  Write-Host "Contents of $llvmDir:"
-                  Get-ChildItem $llvmDir -Recurse -Depth 2 | ForEach-Object { Write-Host "  $_" }
-                }
-                throw "llvm-config.exe not found"
-              }
-            }
-          }
-
+          $llvmPath = "C:\llvm"
           Write-Host "LLVM prefix: $llvmPath"
           & "$llvmPath\bin\llvm-config.exe" --version
 
