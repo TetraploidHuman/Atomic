@@ -91,19 +91,41 @@ jobs:
 
       - name: Install LLVM 20
         run: |
+          $ErrorActionPreference = "Stop"
+          $llvmVersion = "20.1.0"
           $llvmInstaller = "$env:TEMP\LLVM-installer.exe"
-          Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.0/LLVM-20.1.0-win64.exe" -OutFile $llvmInstaller
-          Start-Process -Wait -FilePath $llvmInstaller -ArgumentList "/S"
-          # Remove installer
+
+          Write-Host "Downloading LLVM $llvmVersion..."
+          Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-win64.exe" -OutFile $llvmInstaller
+
+          Write-Host "Running installer /S /D=C:\LLVM..."
+          $proc = Start-Process -PassThru -Wait -FilePath $llvmInstaller -ArgumentList "/S /D=C:\LLVM"
+          Write-Host "Installer exit code: $($proc.ExitCode)"
           Remove-Item $llvmInstaller -Force
 
-      - name: Set LLVM environment
-        run: |
-          $llvmPath = "C:\Program Files\LLVM"
+          # Find where LLVM actually landed
+          $candidates = @(
+            "C:\LLVM",
+            "C:\Program Files\LLVM",
+            "C:\Program Files\LLVM $($llvmVersion.Split('.')[0])"
+          )
+          $llvmPath = $null
+          foreach ($p in $candidates) {
+            if (Test-Path "$p\bin\llvm-config.exe") { $llvmPath = $p; break }
+          }
+          if (-not $llvmPath) {
+            Write-Host "Probing Program Files..."
+            Get-ChildItem "C:\Program Files" -Directory -ErrorAction SilentlyContinue
+            $found = Get-ChildItem "C:\Program Files" -Recurse -Filter "llvm-config.exe" -Depth 4 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $llvmPath = Split-Path -Parent (Split-Path -Parent $found.FullName) }
+          }
+          if (-not $llvmPath) { throw "LLVM installation not found after install" }
+
+          Write-Host "LLVM prefix: $llvmPath"
+          & "$llvmPath\bin\llvm-config.exe" --version
+
           echo "LLVM_SYS_201_PREFIX=$llvmPath" >> $env:GITHUB_ENV
           echo "$llvmPath\bin" >> $env:GITHUB_PATH
-          # Verify installation
-          & "$llvmPath\bin\llvm-config.exe" --version
 
       - name: Build Windows binary
         run: |
@@ -112,15 +134,14 @@ jobs:
 
       - name: Smoke test
         run: |
-          # Test the binary can compile a simple program
-          $env:PATH = "C:\Program Files\LLVM\bin;$env:PATH"
+          # Test the binary can compile a simple program (LLVM bin is on GITHUB_PATH)
           echo 'fun main() { println("CI OK") }' > $env:TEMP\test.at
           .\target\release\atomic.exe build --target native $env:TEMP\test.at --emit obj -o $env:TEMP\test.o
           echo "Windows binary OK"
 
       - name: Bundle DLL dependencies
         run: |
-          $llvmPath = "C:\Program Files\LLVM"
+          $llvmPath = $env:LLVM_SYS_201_PREFIX
           $distDir = "dist\atomic-windows-x64"
           New-Item -ItemType Directory -Force -Path "$distDir\bin"
           Copy-Item "target\release\atomic.exe" "$distDir\bin\atomic.exe"
