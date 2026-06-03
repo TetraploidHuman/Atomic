@@ -128,10 +128,12 @@ jobs:
           echo "$llvmPath\bin" >> $env:GITHUB_PATH
 
       - name: Build Windows binary
+        shell: cmd
         run: |
-          # Dynamic linking against LLVM-C.dll avoids missing static deps (libxml2, etc.)
-          cargo build --release --no-default-features --features codegen-dynamic
-          Get-ChildItem target/release/atomic.exe
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" > nul
+          if not exist C:\llvm\lib\libxml2s.lib lib /OUT:C:\llvm\lib\libxml2s.lib /MACHINE:X64
+          cargo build --release --no-default-features --features codegen-windows
+          dir target\release\atomic.exe
 
       - name: Smoke test
         run: |
