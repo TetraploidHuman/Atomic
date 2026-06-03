@@ -129,14 +129,28 @@ jobs:
 
       - name: Build Windows binary
         run: |
-          # Find MSVC lib.exe to create stub for missing libxml2s.lib
+          # LLVM pre-built binaries may reference system libs not included.
+          # Check what llvm-config reports and which libs are actually present.
+          Write-Host "=== llvm-config --system-libs ==="
+          & C:\llvm\bin\llvm-config.exe --system-libs
+          Write-Host "=== libs in C:\llvm\lib ==="
+          Get-ChildItem C:\llvm\lib\*.lib | ForEach-Object { Write-Host "  $_" }
+
+          # Create stubs for any missing system libraries that llvm-config reports
           $libExe = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC" -Recurse -Filter "lib.exe" -Depth 6 -ErrorAction SilentlyContinue | Where-Object { $_.Directory.Name -eq "x64" -and $_.Directory.Parent.Name -eq "HostX64" } | Select-Object -First 1
           if (-not $libExe) { throw "Cannot find lib.exe" }
-          Write-Host "Found lib.exe: $($libExe.FullName)"
+          Write-Host "lib.exe at: $($libExe.FullName)"
 
-          if (-not (Test-Path "C:\llvm\lib\libxml2s.lib")) {
-            Write-Host "Creating stub libxml2s.lib..."
-            & $libExe.FullName /OUT:C:\llvm\lib\libxml2s.lib /MACHINE:X64
+          $needed = @("libxml2s")
+          foreach ($lib in $needed) {
+            if (-not (Test-Path "C:\llvm\lib\$lib.lib")) {
+              Write-Host "Creating stub: $lib.lib"
+              & $libExe.FullName /OUT:C:\llvm\lib\$lib.lib /MACHINE:X64
+              if (-not (Test-Path "C:\llvm\lib\$lib.lib")) {
+                throw "Failed to create $lib.lib"
+              }
+              Write-Host "  Created: $((Get-Item C:\llvm\lib\$lib.lib).Length) bytes"
+            }
           }
 
           cargo build --release --no-default-features --features codegen-windows
