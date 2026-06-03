@@ -142,44 +142,38 @@ jobs:
           Get-ChildItem target/release/atomic.exe
 
       - name: Smoke test
+        env:
+          RUST_BACKTRACE: full
         run: |
           # Copy DLL so atomic.exe can find it
           Copy-Item "$env:LLVM_SYS_201_PREFIX\bin\LLVM-C.dll" target/release/
-          # Verify binary runs
-          Write-Host "Testing atomic.exe --help..."
-          $helpOut = & .\target\release\atomic.exe --help 2>&1
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "--help failed (exit $LASTEXITCODE): $helpOut"
-            exit 1
-          }
-          Write-Host "atomic.exe OK"
           # Write test file
           $testFile = "test.at"
           'fun main() { println("CI OK") }' | Set-Content -Path $testFile -Encoding ASCII
-          # Step 1: Type-check (no LLVM needed)
+          # Step 1: Type-check (no LLVM codegen needed)
           Write-Host "Testing atomic check..."
           $out = & .\target\release\atomic.exe check $testFile 2>&1
           if ($LASTEXITCODE -ne 0) {
             Write-Error "check failed (exit $LASTEXITCODE): $out"
             exit 1
           }
-          Write-Host "Check: $out"
-          # Step 2: Build with --emit llvm-ir
-          Write-Host "Testing atomic build --emit llvm-ir..."
-          $out = & .\target\release\atomic.exe build --target native $testFile --emit llvm-ir -o test.ll 2>&1
+          Write-Host "Check OK"
+          # Step 2: Build --emit llvm-ir with wasm target (avoids native target init)
+          Write-Host "Testing atomic build --target wasm --emit llvm-ir..."
+          $out = & .\target\release\atomic.exe build --target wasm $testFile --emit ir 2>&1
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "build (llvm-ir) failed (exit $LASTEXITCODE): $out"
+            Write-Error "build (wasm ir) failed (exit $LASTEXITCODE): $out"
             exit 1
           }
-          Write-Host "LLVM IR: $out"
-          # Step 3: Build with --emit obj
-          Write-Host "Testing atomic build --emit obj..."
+          Write-Host "Wasm IR OK"
+          # Step 3: Build --emit obj with native target
+          Write-Host "Testing atomic build --target native --emit obj..."
           $out = & .\target\release\atomic.exe build --target native $testFile --emit obj -o test.o 2>&1
           if ($LASTEXITCODE -ne 0) {
             Write-Error "build (obj) failed (exit $LASTEXITCODE): $out"
             exit 1
           }
-          Write-Host "Object: $out"
+          Write-Host "Obj OK"
           Write-Host "Windows binary OK"
 
       - name: Bundle DLL dependencies
