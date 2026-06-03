@@ -1,0 +1,12 @@
+// Test function overloading
+fun add(x: Int, y: Int): Int {
+    x + y
+}
+fun add(x: Float, y: Float): Float {
+    x + y
+}
+
+fun main() {
+    println(add(1, 2))
+    println(add(1.5, 2.5))
+}

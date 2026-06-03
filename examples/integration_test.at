@@ -1,0 +1,48 @@
+// Integration test: stdlib functions (Phase 5)
+// Tests: Option, Result, List, String builtins
+
+enum Option { Some(Int), None }
+enum Result { Ok(Int), Err(Int) }
+
+fun main() {
+    // === Option stdlib ===
+    val s1: Option = Some(42)
+    val doubled = map(s1) { v -> v * 2 }
+    print(orElse(doubled, 0))           // 84
+
+    val chained = flatMap(s1) { v -> Some(v + 10) }
+    print(orElse(chained, 0))           // 52
+
+    val none_val: Option = None
+    print(orElse(none_val, 99))        // 99
+
+    // === Result stdlib ===
+    val ok_val: Result = Ok(31)
+    val mapped = mapResult(ok_val) { v -> v + 10 }
+    print(orElseResult(mapped, 0))     // 41
+
+    val err_val: Result = Err("boom")
+    print(orElseResult(err_val, 100))  // 100
+
+    // === List builtins ===
+    val xs = List[10, 20, 30]
+    print(len(xs))                      // 3
+    print(is_empty(xs))                 // 0 (false)
+
+    val ys = append(xs, 40)
+    print(len(ys))                      // 4
+
+    // === String builtins ===
+    print(len("hello"))                 // 5
+    print(len(concat("foo", "bar")))    // 6
+
+    val upper = to_upper("abc")
+    print(len(upper))                   // 3
+
+    val lower = to_lower("XYZ")
+    print(len(lower))                   // 3
+
+    val trimmed = trim("  hi  ")
+    print(len(trimmed))                 // 2
+    print(is_empty(trim("   ")))       // 1 (true - all whitespace)
+}

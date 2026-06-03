@@ -1,0 +1,26 @@
+// is type matching examples
+enum Option { Some(Int), None }
+
+fun main() {
+    val s = Some(42)
+    val n = None
+
+    // is with enum variants
+    when s {
+        is Some -> print(1)
+        is None -> print(0)
+    }
+
+    // is with primitive types
+    val x = 42
+    when x {
+        is Int -> print(2)
+        else -> print(9)
+    }
+
+    // is with None
+    when n {
+        is Some -> print(9)
+        is None -> print(3)
+    }
+}

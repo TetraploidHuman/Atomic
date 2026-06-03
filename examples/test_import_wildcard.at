@@ -1,0 +1,9 @@
+// Test: import all items from module
+import test_math_mod
+
+fun main() {
+    println(test_math_mod_add(10, 5))
+    println(test_math_mod_sub(10, 5))
+    println(test_math_mod_PI)
+    println("done")
+}

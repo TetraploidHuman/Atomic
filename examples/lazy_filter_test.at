@@ -1,0 +1,33 @@
+// Test lazy_list with lazy_map and lazy_filter (truly lazy)
+fun main() {
+    // Test 1: infinite sequence with map and take
+    // lazy_list(0){it+1} generates 0,1,2,3,...
+    // map{it*it} transforms to 0,1,4,9,...
+    // take(5) takes first 5 -> [0,1,4,9,16]
+    val squares = to_list(lazy_take(5, lazy_map({it*it}, lazy_list(0){it+1})))
+    print("squares: ")
+    println(squares)
+
+    // Test 2: infinite sequence with filter (even numbers)
+    // lazy_list(0){it+1}.filter{it%2==0}.take(5)
+    // should produce [0,2,4,6,8]
+    val evens = to_list(lazy_take(5, lazy_filter({it%2==0}, lazy_list(0){it+1})))
+    print("evens: ")
+    println(evens)
+
+    // Test 3: map then filter
+    // lazy_list(1){it+1}.map{it*it}.filter{it>10}.take(3)
+    // 1,4,9,16,25,... filtered >10: 16,25,36
+    val r1 = to_list(lazy_take(3, lazy_filter({it>10}, lazy_map({it*it}, lazy_list(1){it+1}))))
+    print("map_filter: ")
+    println(r1)
+
+    // Test 4: filter then map
+    // lazy_list(0){it+1}.filter{it%2==0}.map{it*it}.take(4)
+    // 0,1,2,3,4,5,6,7... filter even: 0,2,4,6... map: 0,4,16,36
+    val r2 = to_list(lazy_take(4, lazy_map({it*it}, lazy_filter({it%2==0}, lazy_list(0){it+1}))))
+    print("filter_map: ")
+    println(r2)
+
+    println("done")
+}

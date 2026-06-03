@@ -1,0 +1,7 @@
+// Input/Output: read_line() returns Option<String> (None on EOF)
+fun main() {
+    val name_opt = read_line()
+    val name = unwrap_or(name_opt, "World")
+    val greeting = concat("Hello, ", name)
+    println(greeting)
+}

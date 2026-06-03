@@ -1,0 +1,11 @@
+// Extension blocks: add methods to existing types
+extension Int {
+    fun double(self) = self * 2
+    fun add(self, other: Int) = self + other
+}
+
+fun main() {
+    val x = 5
+    print(x.double())    // 10
+    print(x.add(3))      // 8
+}

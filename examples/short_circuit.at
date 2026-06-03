@@ -1,0 +1,23 @@
+// Short-circuit evaluation test for and and or
+fun side_effect(x: Int): Bool {
+    print(x)
+    x > 0
+}
+
+fun main() {
+    // and short-circuit: false and ... should NOT evaluate right side
+    val a = false and side_effect(99)   // should NOT print 99
+    print(0)
+
+    // and short-circuit: true and ... SHOULD evaluate right side
+    val b = true and side_effect(42)    // should print 42
+    print(0)
+
+    // or short-circuit: true or ... should NOT evaluate right side
+    val c = true or side_effect(88)    // should NOT print 88
+    print(0)
+
+    // or short-circuit: false or ... SHOULD evaluate right side
+    val d = false or side_effect(77)   // should print 77
+    print(0)
+}

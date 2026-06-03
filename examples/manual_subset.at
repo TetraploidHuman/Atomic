@@ -1,0 +1,18 @@
+fun main() {
+    // Manual subset check using contains
+    val s1 = Set["a", "d"]
+    val s2 = Set["a", "b", "c"]
+
+    // Simulate subset: for each x in s1, check contains(s2, x)
+    val c1 = contains(s2, "a")
+    val c2 = contains(s2, "d")
+
+    print("a in s2: ")
+    print(c1)
+    println("")
+    print("d in s2: ")
+    print(c2)
+    println("")
+
+    println("done")
+}

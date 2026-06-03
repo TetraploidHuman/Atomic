@@ -1,0 +1,12 @@
+// Tuple examples in Atomic
+fun main() {
+    val t = (1, 2, 3)
+    print(t[0])
+    print(t[1])
+    print(t[2])
+
+    // Mixed types
+    val m = (42, "hello")
+    print(m[0])
+    // String printing will show empty since strings aren't printable
+}

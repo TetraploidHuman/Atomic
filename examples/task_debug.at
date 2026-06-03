@@ -1,0 +1,3 @@
+println("before launch")
+launch { 123 }
+println("after launch")

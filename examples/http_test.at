@@ -1,0 +1,7 @@
+fun main() {
+    println("Testing httpRequest...")
+    val response = httpRequest("GET", "https://httpbin.org/get", "", "")
+    println("Response:")
+    println(response)
+    println("Done")
+}

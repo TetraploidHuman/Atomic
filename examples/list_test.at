@@ -1,0 +1,60 @@
+// Test list builtin functions
+fun main() {
+    // Test range
+    val nums = range(1, 5)
+    print("range(1,5) len: ")
+    print(len(nums))
+    println("")
+
+    // Test head
+    print("head: ")
+    print(head(nums))
+    println("")
+
+    // Test last
+    print("last: ")
+    print(last(nums))
+    println("")
+
+    // Test get
+    print("get(nums,2): ")
+    print(get(nums, 2))
+    println("")
+
+    // Test reverse
+    val rev = reverse(nums)
+    print("reverse len: ")
+    print(len(rev))
+    println("")
+
+    // Test take
+    val t = take(nums, 2)
+    print("take(2) len: ")
+    print(len(t))
+    println("")
+
+    // Test drop
+    val d = drop(nums, 2)
+    print("drop(2) len: ")
+    print(len(d))
+    println("")
+
+    // Test contains
+    print("contains 3: ")
+    print(contains(nums, 3))
+    println("")
+
+    // Test repeat
+    val rpt = repeat(42, 3)
+    print("repeat(42,3) len: ")
+    print(len(rpt))
+    println("")
+
+    // Test prepend
+    val pp = prepend(0, nums)
+    print("prepend len: ")
+    print(len(pp))
+    println("")
+
+    println("done")
+}

@@ -1,0 +1,7 @@
+// Test: callback returning Int
+fun apply_direct(f, x) = f(x)
+
+fun main() {
+    val r1 = apply_direct({ x -> x * 2 }, 21)
+    print(r1)
+}

@@ -1,0 +1,9 @@
+// Test: pattern binding + callback in the same function
+fun main() {
+    val opt = Some(21)
+    val f = { x -> x * 2 }
+    when opt {
+        Some(v) -> print(f(v))
+        None -> print(0)
+    }
+}

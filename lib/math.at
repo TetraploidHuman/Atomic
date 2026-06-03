@@ -1,0 +1,14 @@
+fun add(x: Int, y: Int): Int = x + y
+fun sub(x: Int, y: Int): Int = x - y
+fun mul(x: Int, y: Int): Int = x * y
+fun div(x: Int, y: Int): Int = x / y
+fun rem(x: Int, y: Int): Int = x % y
+
+fun abs(x: Int): Int = when x < 0 { -x else x }
+fun min(x: Int, y: Int): Int = when x < y { x else y }
+fun max(x: Int, y: Int): Int = when x > y { x else y }
+
+fun fadd(x: Float, y: Float): Float = x + y
+fun fsub(x: Float, y: Float): Float = x - y
+fun fmul(x: Float, y: Float): Float = x * y
+fun fdiv(x: Float, y: Float): Float = x / y

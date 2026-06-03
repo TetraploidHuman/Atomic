@@ -1,0 +1,34 @@
+// Test standalone postfix ? operator
+enum Option { Some(Int), None }
+
+fun get_some(): Option {
+    Some(100)
+}
+
+fun get_none(): Option {
+    None
+}
+
+fun test_ok(): Option {
+    val x = get_some()?
+    Some(x + 1)
+}
+
+fun test_none(): Option {
+    val x = get_none()?
+    Some(x + 100)  // unreachable
+}
+
+fun main() {
+    val r = test_ok()
+    when r {
+        Some(v) -> println("Ok: ${v}")
+        None -> println("Ok: None")
+    }
+
+    val r2 = test_none()
+    when r2 {
+        Some(v) -> println("None: Some(${v})")
+        None -> println("None: None")
+    }
+}

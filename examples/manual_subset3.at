@@ -1,0 +1,18 @@
+fun main() {
+    val b = Set["a", "b", "c"]
+    val a_items = List["a", "d"]
+    var is_sub = true
+    var idx = 0
+    for item in a_items {
+        print("check: ")
+        val c = contains(b, item)
+        println(c)
+        when c == false {
+            is_sub = false
+        }
+        idx = idx + 1
+    }
+    print("manual subset: ")
+    println(is_sub)
+    println("done")
+}

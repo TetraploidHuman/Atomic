@@ -1,0 +1,23 @@
+// For expression examples ({} syntax)
+// Creates new lists from range iterations
+
+fun main() {
+    // Squares of 1..5: [1, 4, 9, 16, 25]
+    val squares = for x in 1..6 { x * x }
+
+    // Even numbers only: [2, 4, 6, 8, 10]
+    val evens = for x in 1..11 {
+        when x % 2 == 0 { x else continue }
+    }
+
+    // Shorthand with implicit it
+    val cubes = for List[1, 2, 3] { it * it * it }
+
+    // Access elements from the generated lists
+    print(squares[0])  // 1
+    print(squares[4])  // 25
+    print(evens[0])    // 2
+    print(evens[4])    // 10
+    print(cubes[0])    // 1
+    print(cubes[2])    // 27
+}

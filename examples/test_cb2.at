@@ -1,0 +1,19 @@
+// Test: callback that returns Option, called via typed function
+enum Option { Some(Int), None }
+
+fun apply_direct(f, x): Option = f(x)
+
+fun main() {
+    val r1 = apply_direct({ x -> Some(x * 2) }, 21)
+    when r1 {
+        Some(v) -> print(v)
+        None -> print(0)
+    }
+
+    // Test 2: directly call with Option enum
+    val opt = Some(10)
+    when opt {
+        Some(v) -> print(v)
+        None -> print(0)
+    }
+}

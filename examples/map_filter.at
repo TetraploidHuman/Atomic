@@ -1,0 +1,20 @@
+// Map, filter, fold examples in Atomic
+
+fun main() {
+    val nums = List[1, 2, 3, 4, 5]
+
+    // Map: double each element -> List[2, 4, 6, 8, 10]
+    val doubled = map(nums) { it * 2 }
+
+    // Filter: keep only even numbers -> List[2, 4]
+    val evens = filter(nums) { it % 2 == 0 }
+
+    // Fold: sum of all elements -> 15
+    val sum = fold(0, nums) { acc, x -> acc + x }
+
+    // Access results
+    print(doubled[0])   // 2
+    print(doubled[4])   // 10
+    print(evens[0])     // 2
+    print(sum)          // 15
+}

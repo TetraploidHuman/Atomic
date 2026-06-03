@@ -1,0 +1,10 @@
+// Test: FFI - CString conversion
+external fun puts(s: CString): Int
+
+fun main() {
+    val msg = "Hello from Atomic FFI!"
+    val cstr = to_cstring(msg)
+    val back = from_cstring(cstr)
+    println(back)
+    println("done")
+}

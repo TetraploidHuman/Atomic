@@ -1,0 +1,3 @@
+// Minimal stream test - just create and print
+val s = stream()
+println("stream created")

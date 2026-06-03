@@ -1,0 +1,8 @@
+// Minimal pattern variable binding test
+fun main() {
+    val opt = Some(42)
+    when opt {
+        Some(v) -> print(v)
+        None -> print(0)
+    }
+}

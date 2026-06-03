@@ -1,0 +1,12 @@
+// Test: named tuples
+fun main() {
+    val person = (name: "Alice", age: 30)
+    print("name: ")
+    println(person.name)
+    print("age: ")
+    println(person.age)
+    // Positional access still works: .0, .1
+    print("pos0: ")
+    println(person.0)
+    println("done")
+}

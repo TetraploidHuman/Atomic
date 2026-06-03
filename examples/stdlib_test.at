@@ -1,0 +1,47 @@
+// Test for new stdlib functions
+fun main() {
+    // Test starts_with
+    val s = "Hello World"
+    print("starts_with: ")
+    print(starts_with(s, "Hello"))
+    print(" ")
+    print(starts_with(s, "World"))
+    println("")
+
+    // Test ends_with
+    print("ends_with: ")
+    print(ends_with(s, "World"))
+    print(" ")
+    print(ends_with(s, "Hello"))
+    println("")
+
+    // Test substring
+    print("substring: ")
+    print(substring(s, 0, 5))
+    print(" ")
+    print(substring(s, 6, 5))
+    println("")
+
+    // Test parse_int
+    print("parse_int: ")
+    print(parse_int("42"))
+    print(" ")
+    print(parse_int("-123"))
+    println("")
+
+    // Test rand_int and rand_float
+    print("rand_int(1, 10): ")
+    print(rand_int(1, 10))
+    print(" ")
+    print(rand_int(1, 10))
+    print(" ")
+    print(rand_int(1, 10))
+    println("")
+    print("rand_float: ")
+    print(rand_float())
+    print(" ")
+    print(rand_float())
+    println("")
+
+    println("done")
+}

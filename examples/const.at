@@ -1,0 +1,9 @@
+const PI = 3
+const MAX_SIZE: Int = 1024
+const LETTER: Char = 'Z'
+
+fun main() {
+    print(MAX_SIZE)
+    print(PI)
+    print(LETTER)
+}

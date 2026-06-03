@@ -1,0 +1,2 @@
+launch { 123 }
+println("done")

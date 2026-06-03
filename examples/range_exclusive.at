@@ -1,0 +1,6 @@
+fun main() {
+    // Exclusive range ..< (same semantics as .. in current impl)
+    for i in 0..<5 {
+        print(i)
+    }
+}

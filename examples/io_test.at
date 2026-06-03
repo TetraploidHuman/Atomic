@@ -1,0 +1,34 @@
+// Test IO builtins
+fun main() {
+    // Test exists (should work on this file)
+    print("exists self: ")
+    print(exists("examples/io_test.at"))
+    println("")
+
+    // Test exists (should fail on non-existent file)
+    print("exists nofile: ")
+    print(exists("/nonexistent_file_xyz.txt"))
+    println("")
+
+    // Test delete_file (delete a temp file)
+    print("delete nofile: ")
+    print(delete_file("/nonexistent_temp.txt"))
+    println("")
+
+    // Test append_file
+    print("append: ")
+    print(append_file("/tmp/atomic_test_append.txt", "hello\n"))
+    println("")
+
+    // Verify the appended file exists
+    print("appended exists: ")
+    print(exists("/tmp/atomic_test_append.txt"))
+    println("")
+
+    // Cleanup
+    print("delete test: ")
+    print(delete_file("/tmp/atomic_test_append.txt"))
+    println("")
+
+    println("done")
+}

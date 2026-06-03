@@ -1,0 +1,42 @@
+// Test DateTime, type conversion, and random builtins
+fun main() {
+    // Test DateTime field accessors
+    val dt = {year = 2026, month = 6, day = 1, hour = 12, minute = 30, second = 45}
+    print("year: ")
+    print(year(dt))
+    print(" month: ")
+    print(month(dt))
+    println("")
+
+    // Test add_days
+    val d = {year = 2026, month = 6, day = 1}
+    val d2 = add_days(d, 5)
+    print("add_days: ")
+    print(day(d2))
+    println("")
+
+    // Test add_hours
+    val dt2 = add_hours(dt, 2)
+    print("add_hours: ")
+    print(hour(dt2))
+    println("")
+
+    // Test to_int
+    print("to_int(3.7): ")
+    print(to_int(3.7))
+    print(" to_int(42): ")
+    print(to_int(42))
+    println("")
+
+    // Test to_float
+    print("to_float(3): ")
+    print(to_float(3))
+    println("")
+
+    // Test to_char / char_code (identity for now)
+    print("char_code: ")
+    print(char_code(65))
+    println("")
+
+    println("done")
+}

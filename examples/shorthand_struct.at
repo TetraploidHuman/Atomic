@@ -1,0 +1,7 @@
+fun main() {
+    val x = 10
+    val y = 20
+    val point = {x, y}
+    print(point.x)
+    print(point.y)
+}

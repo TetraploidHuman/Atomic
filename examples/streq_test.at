@@ -1,0 +1,12 @@
+fun main() {
+    val a = "hello"
+    val b = "hello"
+    val c = "world"
+
+    print("a == b: ")
+    println(a == b)
+    print("a == c: ")
+    println(a == c)
+
+    println("done")
+}

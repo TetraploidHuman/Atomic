@@ -1,0 +1,107 @@
+// Test new v6 features: Option/Result methods, curry, LazyList ops
+enum Option { Some(Int), None }
+enum Result { Ok(Int), Err(Int) }
+
+fun add(a: Int, b: Int): Int { a + b }
+
+fun main() {
+    // ---- Test Option methods ----
+    val s = Some(42)
+    val n = None
+
+    print("is_some(Some(42)): ")
+    println(is_some(s))
+
+    print("is_none(Some(42)): ")
+    println(is_none(s))
+
+    print("is_none(None): ")
+    println(is_none(n))
+
+    print("unwrap_or(Some(42), 0): ")
+    println(unwrap_or(s, 0))
+
+    print("unwrap_or(None, 0): ")
+    println(unwrap_or(n, 0))
+
+    print("unwrap(Some(42)): ")
+    println(unwrap(s))
+
+    // ---- Test Option dot-notation methods ----
+    print("s.is_some(): ")
+    println(s.is_some())
+
+    print("n.is_none(): ")
+    println(n.is_none())
+
+    print("s.unwrap_or(99): ")
+    println(s.unwrap_or(99))
+
+    print("n.unwrap_or(99): ")
+    println(n.unwrap_or(99))
+
+    // ---- Test Result methods ----
+    val ok = Ok(10)
+    val err = Err(99)
+
+    print("is_ok(Ok(10)): ")
+    println(is_ok(ok))
+
+    print("is_err(Err(...)): ")
+    println(is_err(err))
+
+    print("unwrap_or(Ok(10), 0): ")
+    println(unwrap_or(ok, 0))
+
+    print("unwrap_or(Err(...), 0): ")
+    println(unwrap_or(err, 0))
+
+    print("unwrap(Ok(10)): ")
+    println(unwrap(ok))
+
+    // ---- Test ok() - Option to Result ----
+    print("ok(Some(42), 99) -> is_ok: ")
+    val r1 = ok(s, 99)
+    println(is_ok(r1))
+
+    print("ok(None, 99) -> is_err: ")
+    val r2 = ok(n, 99)
+    println(is_err(r2))
+
+    // ---- Test to_lazy_list and to_list ----
+    val lst = List[1, 2, 3]
+    val ll = to_lazy_list(lst)
+    print("to_lazy_list + len: ")
+    println(len(ll))
+
+    val back = to_list(ll)
+    print("to_list back + len: ")
+    println(len(back))
+
+    // ---- Test lazy_head ----
+    print("lazy_head of non-empty: ")
+    val h1 = lazy_head(ll)
+    println(is_some(h1))
+
+    val empty_ll = to_lazy_list(List[])
+    print("lazy_head of empty: ")
+    val h2 = lazy_head(empty_ll)
+    println(is_none(h2))
+
+    // ---- Test lazy_take ----
+    val taken = lazy_take(2, ll)
+    print("lazy_take(2) len: ")
+    println(len(taken))
+
+    // ---- Test lazy_drop ----
+    val dropped = lazy_drop(1, ll)
+    print("lazy_drop(1) len: ")
+    println(len(dropped))
+
+    // ---- Test curry ----
+    val add5 = curry(add, 5)
+    print("curry(add,5)(10): ")
+    println(add5(10))
+
+    println("done")
+}

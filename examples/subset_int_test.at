@@ -1,0 +1,24 @@
+fun main() {
+    val s1 = Set[1, 4]
+    val s2 = Set[1, 2, 3]
+
+    print("s1 len: ") println(len(s1))
+    print("s2 len: ") println(len(s2))
+
+    // Contains checks
+    print("1 in s2: ") println(contains(s2, 1))
+    print("4 in s2: ") println(contains(s2, 4))
+
+    // Subset check: {1,4} subset of {1,2,3} should be false
+    val r = set_is_subset(s1, s2)
+    print("subset: ")
+    println(r)
+
+    // Also test: {1} subset of {1,2,3} should be true
+    val s3 = Set[1]
+    val r2 = set_is_subset(s3, s2)
+    print("subset2: ")
+    println(r2)
+
+    println("done")
+}

@@ -1,0 +1,18 @@
+fun main() {
+    val s1 = Set["a", "d"]
+    val s2 = Set["a", "b", "c"]
+
+    // Verify lengths
+    print("s1 len: ") println(len(s1))
+    print("s2 len: ") println(len(s2))
+
+    // Check each element manually
+    print("a in s2: ") println(contains(s2, "a"))
+    print("d in s2: ") println(contains(s2, "d"))
+
+    val r = set_is_subset(s1, s2)
+    print("subset: ")
+    println(r)
+
+    println("done")
+}

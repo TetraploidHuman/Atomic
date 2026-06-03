@@ -1,0 +1,31 @@
+// Test basic coroutine: launch and coroutineScope
+
+fun main() {
+    // Basic coroutineScope collecting launch results
+    val results = coroutineScope {
+        launch { 10 }
+        launch { 20 }
+        launch { 30 }
+    }
+    print(len(results))
+
+    // Nested coroutineScope
+    val nested = coroutineScope {
+        launch { 100 }
+        launch {
+            val inner = coroutineScope {
+                launch { 200 }
+                launch { 300 }
+            }
+            len(inner)
+        }
+    }
+    print(len(nested))
+
+    // launch result can be any expression
+    val computed = coroutineScope {
+        launch { 1 + 2 }
+        launch { 4 * 5 }
+    }
+    print(len(computed))
+}

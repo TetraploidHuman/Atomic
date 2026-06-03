@@ -1,0 +1,17 @@
+// String interpolation test (v6: ${expr} only)
+fun main() {
+    val name = "World"
+    val age = 42
+
+    // ${expr} interpolation
+    print("Hello, ${name}!")
+
+    // ${expr} interpolation
+    print("Age: ${age}")
+
+    // Multiple interpolations
+    print("${name} is ${age} years old")
+
+    // just literal (no interpolation)
+    print("done")
+}

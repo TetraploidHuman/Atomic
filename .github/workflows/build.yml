@@ -1,0 +1,176 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  LLVM_VERSION: "20"
+
+jobs:
+  # ── Tests (library crate only, no LLVM needed) ──
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run library tests
+        run: cargo test --lib
+
+      - name: Build LSP server
+        run: cargo build -p atomic-lsp --release
+
+      - name: Upload LSP (Linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: atomic-lsp-linux-x64
+          path: target/release/atomic-lsp
+
+  # ── Linux x86_64 compiler builds ──
+  build-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM 20
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo add-apt-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_VERSION main"
+          sudo apt-get update
+          sudo apt-get install -y llvm-$LLVM_VERSION-dev libclang-$LLVM_VERSION-dev lld-$LLVM_VERSION
+          # Make llvm-config available unversioned
+          sudo ln -sf /usr/bin/llvm-config-$LLVM_VERSION /usr/local/bin/llvm-config
+          echo "LLVM_SYS_201_PREFIX=/usr/lib/llvm-$LLVM_VERSION" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/lib/llvm-$LLVM_VERSION/lib" >> $GITHUB_ENV
+          llvm-config --version
+
+      - name: Build static (self-contained)
+        env:
+          LLVM_SYS_201_PREFIX: /usr/lib/llvm-20
+        run: |
+          cargo build --release --no-default-features --features codegen-static
+          cp target/release/atomic atomic-linux-x64-static
+          ls -lh atomic-linux-x64-static
+
+      - name: Build dynamic (needs libLLVM.so)
+        env:
+          LLVM_SYS_201_PREFIX: /usr/lib/llvm-20
+          LD_LIBRARY_PATH: /usr/lib/llvm-20/lib
+        run: |
+          cargo build --release --features codegen-dynamic
+          cp target/release/atomic atomic-linux-x64-dynamic
+          ls -lh atomic-linux-x64-dynamic
+
+      - name: Smoke test
+        run: |
+          # Test static binary can compile a simple program
+          echo 'fun main() { println("CI OK") }' > /tmp/test.at
+          ./atomic-linux-x64-static build --target native /tmp/test.at --emit obj -o /tmp/test.o
+          file /tmp/test.o && echo "Static binary OK"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: atomic-linux-x64
+          path: |
+            atomic-linux-x64-static
+            atomic-linux-x64-dynamic
+
+  # ── Windows x86_64 compiler build ──
+  build-windows:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM 20
+        run: |
+          $llvmInstaller = "$env:TEMP\LLVM-installer.exe"
+          Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.0/LLVM-20.1.0-win64.exe" -OutFile $llvmInstaller
+          Start-Process -Wait -FilePath $llvmInstaller -ArgumentList "/S"
+          # Remove installer
+          Remove-Item $llvmInstaller -Force
+
+      - name: Set LLVM environment
+        run: |
+          $llvmPath = "C:\Program Files\LLVM"
+          echo "LLVM_SYS_201_PREFIX=$llvmPath" >> $env:GITHUB_ENV
+          echo "$llvmPath\bin" >> $env:GITHUB_PATH
+          # Verify installation
+          & "$llvmPath\bin\llvm-config.exe" --version
+
+      - name: Build Windows binary
+        run: |
+          cargo build --release --no-default-features --features codegen-windows
+          ls -lh target/release/atomic.exe
+
+      - name: Smoke test
+        run: |
+          # Test the binary can compile a simple program
+          $env:PATH = "C:\Program Files\LLVM\bin;$env:PATH"
+          echo 'fun main() { println("CI OK") }' > $env:TEMP\test.at
+          .\target\release\atomic.exe build --target native $env:TEMP\test.at --emit obj -o $env:TEMP\test.o
+          echo "Windows binary OK"
+
+      - name: Bundle DLL dependencies
+        run: |
+          $llvmPath = "C:\Program Files\LLVM"
+          $distDir = "dist\atomic-windows-x64"
+          New-Item -ItemType Directory -Force -Path "$distDir\bin"
+          Copy-Item "target\release\atomic.exe" "$distDir\bin\atomic.exe"
+          Copy-Item "$llvmPath\bin\LLVM-C.dll" "$distDir\bin\"
+          # Copy examples & stdlib
+          Copy-Item -Recurse "examples" "$distDir\examples"
+          Copy-Item -Recurse "stdlib" "$distDir\stdlib"
+          # Create zip
+          Compress-Archive -Path "$distDir\*" -DestinationPath "atomic-windows-x64.zip"
+          ls -lh atomic-windows-x64.zip
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: atomic-windows-x64
+          path: |
+            target/release/atomic.exe
+            atomic-windows-x64.zip
+
+  # ── GitHub Release (only on version tags) ──
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, build-linux, build-windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Create release archive
+        run: |
+          mkdir -p release
+          ls -R
+
+          # Linux
+          cp atomic-linux-x64/atomic-linux-x64-static release/
+          cp atomic-linux-x64/atomic-linux-x64-dynamic release/
+          tar czf release/atomic-linux-x64.tar.gz \
+            -C atomic-linux-x64 atomic-linux-x64-static atomic-linux-x64-dynamic
+
+          # Windows
+          cp atomic-windows-x64/atomic-windows-x64.zip release/
+
+          # LSP
+          cp atomic-lsp-linux-x64/atomic-lsp release/atomic-lsp-linux-x64
+
+          ls -lh release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

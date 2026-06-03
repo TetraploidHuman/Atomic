@@ -1,0 +1,16 @@
+// Type annotation examples
+fun main() {
+    // Basic type annotations
+    val x: Int = 42
+    print(x)
+
+    val pi: Float = 3.14
+    // Float printing not yet supported, but the binding works
+
+    val b: Bool = true
+    print(1)
+
+    // Type annotation with coercion: Int literal -> Float variable
+    val f: Float = 42
+    print(2)
+}

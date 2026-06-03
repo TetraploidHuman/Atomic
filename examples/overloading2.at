@@ -1,0 +1,32 @@
+// Test function overloading - comprehensive
+fun greet(name: String): String {
+    "Hello, " + name
+}
+fun greet(times: Int): Int {
+    times * 2
+}
+
+fun process(x: Int): Int {
+    x * 10
+}
+fun process(x: Float): Float {
+    x * 10.0
+}
+
+fun main() {
+    // String overload
+    println(greet("World"))
+
+    // Int overload
+    println(greet(5))
+
+    // Int overload via identifier
+    val n = 3
+    println(process(n))
+
+    // Float overload
+    println(process(2.5))
+
+    // Int overload with expression arg
+    println(process(1 + 2))
+}

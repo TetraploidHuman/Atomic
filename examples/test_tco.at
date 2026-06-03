@@ -1,0 +1,30 @@
+// Test TCO: tail-recursive functions
+// Without TCO, deep recursion would overflow the stack
+
+fun factorial(n: Int, acc: Int): Int {
+    return when n <= 1 { acc else factorial(n - 1, acc * n) }
+}
+
+fun sum_range(n: Int, acc: Int): Int {
+    return when n <= 0 { acc else sum_range(n - 1, acc + n) }
+}
+
+fun countdown(n: Int): Int {
+    return when n <= 0 { 0 else countdown(n - 1) }
+}
+
+fun main() {
+    val f5 = factorial(5, 1)
+    print(f5)
+
+    val f10 = factorial(10, 1)
+    print(f10)
+
+    // Deep recursion that would overflow without TCO
+    val s1000 = sum_range(1000, 0)
+    print(s1000)
+
+    // Countdown from 5000
+    val cd = countdown(5000)
+    print(cd)
+}

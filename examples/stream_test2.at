@@ -1,0 +1,5 @@
+val s = stream()
+send(s, 42)
+println("sent ok")
+val a = receive(s)
+println(a)

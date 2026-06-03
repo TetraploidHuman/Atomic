@@ -1,0 +1,22 @@
+// Test Map<K,V> and Set<T> - index access
+
+fun main() {
+    val scores = Map["alice": 100, "bob": 90]
+
+    // Test: Map contains
+    val has_bob = scores.contains("bob")
+    print(has_bob)
+
+    // Test: Map index access + orElse
+    val alice_score = orElse(scores["alice"], 0)
+    print(alice_score)
+
+    // Test: Missing key returns default
+    val missing = orElse(scores["eve"], 999)
+    print(missing)
+
+    // Test: Set contains
+    val names = Set["alice", "bob"]
+    val has_alice = names.contains("alice")
+    print(has_alice)
+}

@@ -1,0 +1,8 @@
+// Module import test
+import math
+
+fun main() {
+    print(math.add(10, 5))   // 15
+    print(math.sub(10, 3))   // 7
+    print(math.mul(3, 4))    // 12
+}

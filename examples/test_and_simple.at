@@ -1,0 +1,10 @@
+// Test: and guards in when - simple
+fun main() {
+    val x = 5
+    val result = when {
+        x < 0 -> "negative"
+        else -> "non-negative"
+    }
+    println(result)
+    println("done")
+}

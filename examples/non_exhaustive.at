@@ -1,0 +1,14 @@
+// Non-exhaustive when match - should produce compile error
+enum Color { Red, Green, Blue }
+
+fun describe_color(c: Color): Int {
+    when c {
+        Red -> 1
+        Green -> 2
+        // Missing Blue -> compile error
+    }
+}
+
+fun main() {
+    print(describe_color(Red))
+}

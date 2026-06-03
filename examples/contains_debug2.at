@@ -1,0 +1,26 @@
+fun main() {
+    val xs = List["a", "b", "c"]
+
+    val c1 = contains(xs, "a")
+    print("contains a: ")
+    print(c1)
+    println("")
+
+    val c2 = contains(xs, "d")
+    print("contains d: ")
+    print(c2)
+    println("")
+
+    val ys = List[1, 2, 3]
+    val c3 = contains(ys, 2)
+    print("contains 2: ")
+    print(c3)
+    println("")
+
+    val c4 = contains(ys, 5)
+    print("contains 5: ")
+    print(c4)
+    println("")
+
+    println("done")
+}

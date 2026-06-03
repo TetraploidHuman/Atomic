@@ -1,0 +1,16 @@
+// Test: enum when + callback combination
+fun apply_when(opt: Option, f): Option {
+    when opt {
+        Some(v) -> f(v)
+        None -> None
+    }
+}
+
+fun main() {
+    // Test 1: basic apply_when with callback
+    val r1 = apply_when(Some(21)) { x -> x * 2 }
+    when r1 {
+        Some(v) -> print(v)
+        None -> print(0)
+    }
+}

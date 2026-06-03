@@ -1,0 +1,15 @@
+fun main() {
+    val b = Set["a", "b", "c"]
+    val a_items = List["a", "d"]
+    var idx = 0
+    for item in a_items {
+        print("checking item ")
+        print(idx)
+        print(": ")
+        val c = contains(b, item)
+        print(c)
+        println("")
+        idx = idx + 1
+    }
+    println("done")
+}

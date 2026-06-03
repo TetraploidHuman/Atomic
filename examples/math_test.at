@@ -1,0 +1,71 @@
+// Test math builtin functions
+fun main() {
+    // Test pi and e constants
+    print("pi: ")
+    print(pi())
+    println("")
+
+    print("e: ")
+    print(e())
+    println("")
+
+    // Test sqrt
+    print("sqrt(16): ")
+    print(sqrt(16.0))
+    println("")
+
+    // Test sin/cos/tan
+    print("sin(0): ")
+    print(sin(0.0))
+    println("")
+
+    print("cos(0): ")
+    print(cos(0.0))
+    println("")
+
+    // Test floor/ceil/round
+    print("floor(3.7): ")
+    print(floor(3.7))
+    println("")
+
+    print("ceil(3.2): ")
+    print(ceil(3.2))
+    println("")
+
+    print("round(3.5): ")
+    print(round(3.5))
+    println("")
+
+    // Test abs/min/max
+    print("abs(-5): ")
+    print(abs(-5))
+    println("")
+
+    print("min(3, 7): ")
+    print(min(3, 7))
+    println("")
+
+    print("max(3.0, 7.0): ")
+    print(max(3.0, 7.0))
+    println("")
+
+    // Test exp/log
+    print("exp(1): ")
+    print(exp(1.0))
+    println("")
+
+    print("log(e): ")
+    print(log(e()))
+    println("")
+
+    // Test clamp
+    print("clamp(5, 0, 10): ")
+    print(clamp(5, 0, 10))
+    println("")
+
+    print("clamp(-3, 0, 10): ")
+    print(clamp(-3, 0, 10))
+    println("")
+
+    println("done")
+}

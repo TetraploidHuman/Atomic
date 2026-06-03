@@ -1,0 +1,32 @@
+// String pattern matching test - tests content comparison, not just length
+fun main() {
+    val s = "hello"
+
+    // Same length, different content ("world" = 5 chars, "hello" = 5 chars)
+    when s {
+        "world" -> print(0)
+        "hello" -> print(1)
+        _ -> print(0)
+    }
+
+    // Different length - should correctly not match
+    when s {
+        "hell" -> print(0)
+        _ -> print(2)
+    }
+
+    // Same length, different content again
+    val x = "abcde"
+    when x {
+        "abcdf" -> print(0)
+        "abcde" -> print(3)
+        _ -> print(0)
+    }
+
+    // Empty string test
+    val e = ""
+    when e {
+        "" -> print(4)
+        _ -> print(0)
+    }
+}

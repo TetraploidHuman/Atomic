@@ -1,0 +1,15 @@
+fun main() {
+    // Test with different length strings
+    val r = set_is_subset(Set["aa", "d"], Set["aa", "bbb", "c"])
+    print("subset (aa,d) in (aa,bbb,c): ")
+    print(r)
+    println("")
+
+    // Test with ints
+    val r2 = set_is_subset(Set[1, 5], Set[1, 2, 3])
+    print("subset (1,5) in (1,2,3): ")
+    print(r2)
+    println("")
+
+    println("done")
+}

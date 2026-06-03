@@ -1,0 +1,15 @@
+fun main() {
+    val s = Set["a", "b", "c"]
+
+    val c1 = contains(s, "a")
+    print("contains a: ")
+    print(c1)
+    println("")
+
+    val c2 = contains(s, "d")
+    print("contains d: ")
+    print(c2)
+    println("")
+
+    println("done")
+}

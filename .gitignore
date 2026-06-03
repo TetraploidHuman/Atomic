@@ -1,0 +1,28 @@
+# Build output
+target/
+dist/
+*.o
+*.obj
+*.exe
+*.wasm
+a.out
+
+# Compiler binaries (built locally)
+atomic-linux-*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude local settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+/tmp/

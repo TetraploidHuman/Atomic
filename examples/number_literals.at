@@ -1,0 +1,12 @@
+fun main() {
+    // Binary: 0b1010 = 10
+    print(0b1010)
+    // Octal: 0o777 = 511
+    print(0o777)
+    // Hex: 0xFF = 255
+    print(0xFF)
+    // Binary: 0b1111_0000 = 240
+    print(0b1111_0000)
+    // Octal: 0o10 = 8
+    print(0o10)
+}

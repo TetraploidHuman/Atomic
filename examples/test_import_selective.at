@@ -1,0 +1,9 @@
+// Test: import selective items from module
+import test_math_mod.{add, sub, PI}
+
+fun main() {
+    println(add(10, 5))
+    println(sub(10, 5))
+    println(PI)
+    println("done")
+}

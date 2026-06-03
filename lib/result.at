@@ -1,0 +1,27 @@
+// Standard library for Result<T, E>
+// Requires: enum Result<T, E> { Ok(T), Err(E) }
+// Generic: functions work with any type via type erasure
+
+// mapResult: transform the Ok value, preserve Err
+fun mapResult(res: Result, f): Result {
+    when res {
+        Ok(v) -> Ok(f(v))
+        Err(e) -> Err(e)
+    }
+}
+
+// flatMapResult: chain Result-returning functions
+fun flatMapResult(res: Result, f): Result {
+    when res {
+        Ok(v) -> f(v)
+        Err(e) -> Err(e)
+    }
+}
+
+// orElseResult: extract Ok value or return default
+fun orElseResult(res: Result, default) {
+    when res {
+        Ok(v) -> v
+        Err(e) -> default
+    }
+}

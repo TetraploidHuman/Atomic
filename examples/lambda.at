@@ -1,0 +1,17 @@
+// Lambda examples in Atomic
+fun main() {
+    // No-param lambda: call with ()
+    val answer = { 42 }
+    print(answer())
+
+    // Single param lambda (implicit it)
+    val double = { it * 2 }
+    print(double(21))
+
+    // Multi-param lambda
+    val add = { x, y -> x + y }
+    print(add(10, 20))
+
+    // Lambda called directly
+    print({ x, y -> x * y }(6, 7))
+}

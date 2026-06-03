@@ -1,0 +1,10 @@
+// Test: define callback function but don't call it from main
+fun apply_direct(f, x) = f(x)
+
+fun main() {
+    val opt = Some(10)
+    when opt {
+        Some(v) -> print(v)
+        None -> print(0)
+    }
+}

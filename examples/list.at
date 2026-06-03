@@ -1,0 +1,10 @@
+// List and index examples in Atomic
+fun main() {
+    // Create a list
+    val nums = List[10, 20, 30, 40, 50]
+
+    // Access by index
+    print(nums[0])
+    print(nums[2])
+    print(nums[4])
+}

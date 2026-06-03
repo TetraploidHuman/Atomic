@@ -1,0 +1,81 @@
+// Atomic Streaming I/O Library
+// File handle type and streaming read/write operations
+// Binary mode supported via "b" suffix in mode string
+
+type FileHandle = {}
+
+// ---- File Operations ----
+
+// open_file(path: String, mode: String) -> FileHandle
+// Opens a file. Mode: "r" read, "w" write, "a" append,
+// add "b" for binary: "rb", "wb", "ab"
+// Returns a FileHandle (null/zero if failed)
+
+// close_file(file: FileHandle) -> Bool
+// Closes the file. Returns true on success.
+
+// is_eof(file: FileHandle) -> Bool
+// Returns true if file is at end-of-file.
+
+// file_flush(file: FileHandle) -> Bool
+// Flushes buffered writes to disk.
+
+// file_seek(file: FileHandle, offset: Int, whence: Int) -> Bool
+// Seeks in file. whence: 0=SET, 1=CUR, 2=END
+
+// file_tell(file: FileHandle) -> Int
+// Returns current file position.
+
+// ---- Text Mode Reading ----
+
+// file_read_line(file: FileHandle) -> String
+// Reads one line (without trailing newline). Returns empty string on EOF.
+
+// ---- Binary/Chunked Reading ----
+
+// file_read_bytes(file: FileHandle, size: Int) -> String
+// Reads up to size bytes. Returns empty string on EOF.
+// Works in both text and binary mode.
+
+// ---- Writing ----
+
+// file_write(file: FileHandle, data: String) -> Bool
+// Writes raw data to file. Does NOT add newline.
+
+// file_write_line(file: FileHandle, data: String) -> Bool
+// Writes data + newline to file.
+
+// ---- Convenience Functions ----
+
+fun readFileLines(path: String): List[String] = {
+    var lines = List[]
+    val f = open_file(path, "r")
+    for not is_eof(f) {
+        var line = file_read_line(f)
+        when len(line) > 0 {
+            lines = append(lines, line)
+        }
+    }
+    close_file(f)
+    return lines
+}
+
+fun writeFileLines(path: String, lines: List[String]): Bool = {
+    val f = open_file(path, "w")
+    for line in lines {
+        file_write_line(f, line)
+    }
+    return close_file(f)
+}
+
+fun copyFile(src: String, dst: String): Bool = {
+    val r = open_file(src, "rb")
+    val w = open_file(dst, "wb")
+    var chunk = file_read_bytes(r, 4096)
+    for len(chunk) > 0 {
+        file_write(w, chunk)
+        chunk = file_read_bytes(r, 4096)
+    }
+    close_file(r)
+    return close_file(w)
+}

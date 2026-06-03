@@ -1,0 +1,38 @@
+// Error propagation examples (val x?, var x?)
+enum Option { Some(Int), None }
+
+fun get_some(): Option {
+    Some(42)
+}
+
+fun get_none(): Option {
+    None
+}
+
+// Propagation: if None -> return None; if Some(v) -> use v
+fun add_two(): Option {
+    val x? = get_some()
+    Some(x + 2)
+}
+
+// Propagation that triggers early return
+fun propagate_none(): Option {
+    val x? = get_none()
+    Some(x + 100)  // unreachable when get_none() returns None
+}
+
+fun main() {
+    // Test 1: Successful propagation
+    val r1 = add_two()
+    when r1 {
+        Some(v) -> print(v)
+        None -> print(0)
+    }
+
+    // Test 2: None propagation triggers early return
+    val r2 = propagate_none()
+    when r2 {
+        Some(v) -> print(v)
+        None -> print(9)
+    }
+}

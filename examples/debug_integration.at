@@ -1,0 +1,30 @@
+// Debug integration_test crash - step 5: is_empty + append
+
+enum Option { Some(Int), None }
+enum Result { Ok(Int), Err(Int) }
+
+fun main() {
+    // Option
+    val s1 = Some(42)
+    val doubled = map(s1) { v -> v * 2 }
+    print(orElse(doubled, 0))
+    val chained = flatMap(s1) { v -> Some(v + 10) }
+    print(orElse(chained, 0))
+    val none_val = None
+    print(orElse(none_val, 99))
+
+    // Result
+    val ok_val = Ok(31)
+    val mapped = mapResult(ok_val) { v -> v + 10 }
+    print(orElseResult(mapped, 0))
+    val err_val = Err("boom")
+    print(orElseResult(err_val, 100))
+
+    // List
+    val xs = List[10, 20, 30]
+    print(len(xs))
+    print(is_empty(xs))
+
+    val ys = append(xs, 40)
+    print(len(ys))
+}

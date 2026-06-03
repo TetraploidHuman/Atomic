@@ -1,0 +1,6 @@
+fun main() {
+    val pair = (42, 10)
+    val (x, y) = pair
+    print(x)
+    print(y)
+}

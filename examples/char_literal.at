@@ -1,0 +1,9 @@
+fun main() {
+    val a = 'A'
+    val newline = '\n'
+    val tab = '\t'
+
+    // Print char as integer (Unicode code point)
+    // 'A' is 65
+    print(a)
+}

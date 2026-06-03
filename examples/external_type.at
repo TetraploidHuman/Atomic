@@ -1,0 +1,5 @@
+external type FILE
+
+fun main() {
+    println("external type works!")
+}

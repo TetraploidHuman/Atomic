@@ -1,0 +1,41 @@
+// Exhaustiveness checking examples
+enum Option { Some(Int), None }
+
+enum Color { Red, Green, Blue }
+
+fun describe_color(c: Color): Int {
+    // Exhaustive: all 3 variants covered
+    when c {
+        Red -> 1
+        Green -> 2
+        Blue -> 3
+    }
+}
+
+fun describe_opt(opt: Option): Int {
+    // Exhaustive: both variants covered
+    when opt {
+        Some(x) -> x
+        None -> 0
+    }
+}
+
+fun describe_opt_else(opt: Option): Int {
+    // Exhaustive via else/wildcard
+    when opt {
+        Some(x) -> x
+        else -> -1
+    }
+}
+
+fun main() {
+    val c = Red
+    print(describe_color(c))
+
+    val s = Some(42)
+    print(describe_opt(s))
+
+    val n = None
+    print(describe_opt(n))
+    print(describe_opt_else(n))
+}

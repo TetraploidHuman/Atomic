@@ -1,0 +1,7 @@
+// Test: untyped callback parameter
+fun call_it(f, x) = f(x)
+
+fun main() {
+    val result = call_it({ n -> n + 10 }, 5)
+    print(result)
+}

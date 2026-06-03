@@ -1,0 +1,12 @@
+// Simple overload test - string
+fun greet(name: String): String {
+    "Hello, " + name
+}
+fun greet(x: Int): Int {
+    x
+}
+
+fun main() {
+    println(greet("World"))
+    println(greet(42))
+}

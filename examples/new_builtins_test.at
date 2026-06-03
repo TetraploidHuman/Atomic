@@ -1,0 +1,35 @@
+// Test tail, zip, split_lines, index_of
+fun main() {
+    val xs = range(1, 5)
+
+    // Test tail (now returns Option<List<Int>>)
+    val t = tail(xs)
+    print("tail is_some: ")
+    println(is_some(t))
+
+    // Test zip
+    val ys = range(10, 13)
+    val z = zip(xs, ys)
+    print("zip len: ")
+    print(len(z))
+    println("")
+
+    // Test split_lines
+    val lines = split_lines("a\nb\nc")
+    print("lines count: ")
+    print(len(lines))
+    println("")
+
+    // Test index_of (string) - signature is index_of(needle, haystack)
+    print("index_of: ")
+    val idx = index_of("world", "hello world")
+    print(unwrap_or(idx, -1))
+    println("")
+
+    print("index_of not found: ")
+    val idx2 = index_of("xyz", "hello")
+    print(unwrap_or(idx2, -1))
+    println("")
+
+    println("done")
+}

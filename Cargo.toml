@@ -1,0 +1,39 @@
+[workspace]
+members = ["lsp"]
+
+[package]
+name = "atomic"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "atomic"
+path = "src/lib.rs"
+
+[[bin]]
+name = "atomic"
+path = "src/main.rs"
+required-features = ["inkwell"]
+
+[dependencies]
+inkwell = { version = "0.9", default-features = false, features = ["target-all"], optional = true }
+clap = { version = "4", features = ["derive"] }
+ariadne = "0.4"
+toml = "1.0"
+
+[features]
+default = ["codegen-dynamic"]
+# Static LLVM linking: self-contained binary (~150MB), no system LLVM needed
+codegen-static = ["inkwell/llvm20-1-force-static"]
+# Dynamic LLVM linking: small binary (~4MB), needs libLLVM.so.20.1 at runtime
+codegen-dynamic = ["inkwell/llvm20-1-force-dynamic"]
+# Windows: link LLVM at build time, DLL at runtime (bundle LLVM-C.dll)
+codegen-windows = ["inkwell/llvm20-1"]
+# Convenience alias
+codegen = ["codegen-dynamic"]
+
+[profile.release]
+opt-level = "s"
+codegen-units = 1
+
+[dev-dependencies]

@@ -1,0 +1,11 @@
+// Stream basic test: create, send, receive
+val s = stream()
+send(s, 42)
+send(s, 100)
+send(s, 999)
+val a = receive(s)
+val b = receive(s)
+val c = receive(s)
+println(a)
+println(b)
+println(c)

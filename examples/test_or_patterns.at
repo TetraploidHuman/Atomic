@@ -1,0 +1,11 @@
+// Test: or-patterns in when
+fun main() {
+    val x = 1
+    val result = when x {
+        0 | 1 | 2 -> "small"
+        3 | 4 | 5 -> "medium"
+        else -> "large"
+    }
+    println(result)
+    println("done")
+}

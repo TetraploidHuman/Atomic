@@ -1,0 +1,14 @@
+// var: mutable variable binding
+// val: immutable variable binding (default)
+fun main() {
+    var x = 10
+    print(x)         // 10
+    x = 20
+    print(x)         // 20
+    x += 30
+    print(x)         // 50
+
+    // val bindings cannot be reassigned
+    val y = 42
+    print(y)         // 42
+}

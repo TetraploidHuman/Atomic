@@ -1,0 +1,143 @@
+// Atomic HTTP Client Library
+// Ktor-inspired HTTP client framework
+
+// ---- Type Aliases ----
+type HttpResponse = {status: Int, body: String}
+type HttpRequestBuilder = {method: String, url: String, headers: String, body: String}
+type HttpClient = {}
+
+// ---- Constructor ----
+fun httpClient(): HttpClient = {}
+
+// ---- Response helpers ----
+fun isSuccess(response: HttpResponse): Bool = response.status >= 200 and response.status < 300
+
+// ---- Builder chain methods ----
+fun header(builder: HttpRequestBuilder, name: String, value: String): HttpRequestBuilder = {
+    val newHeaders = when builder.headers == "" {
+        name + ": " + value
+    else
+        builder.headers + "\n" + name + ": " + value
+    }
+    return {method = builder.method, url = builder.url, headers = newHeaders, body = builder.body}
+}
+
+fun body(builder: HttpRequestBuilder, data: String): HttpRequestBuilder = {
+    return {method = builder.method, url = builder.url, headers = builder.headers, body = data}
+}
+
+// ---- Execute the request ----
+fun send(builder: HttpRequestBuilder): HttpResponse = {
+    val raw = httpRequest(builder.method, builder.url, builder.headers, builder.body)
+    return parseResponse(raw)
+}
+
+// ---- HttpClient methods ----
+fun get(client: HttpClient, url: String): HttpRequestBuilder = {
+    return {method = "GET", url = url, headers = "", body = ""}
+}
+
+fun post(client: HttpClient, url: String): HttpRequestBuilder = {
+    return {method = "POST", url = url, headers = "", body = ""}
+}
+
+fun put(client: HttpClient, url: String): HttpRequestBuilder = {
+    return {method = "PUT", url = url, headers = "", body = ""}
+}
+
+fun delete(client: HttpClient, url: String): HttpRequestBuilder = {
+    return {method = "DELETE", url = url, headers = "", body = ""}
+}
+
+// ---- Convenience Functions ----
+fun httpGet(url: String, headers: String): HttpResponse = {
+    val raw = httpRequest("GET", url, headers, "")
+    return parseResponse(raw)
+}
+
+fun httpPost(url: String, jsonBody: String, headers: String): HttpResponse = {
+    val raw = httpRequest("POST", url, headers, jsonBody)
+    return parseResponse(raw)
+}
+
+// ---- Response Parsing ----
+fun parseResponse(raw: String): HttpResponse = {
+    return parseResponseImpl(raw, findNewline(raw))
+}
+
+fun parseResponseImpl(raw: String, newlinePos: Int): HttpResponse = {
+    val statusStr = substring(raw, 0, newlinePos)
+    val bodyStr = substring(raw, newlinePos + 1, len(raw) - newlinePos - 1)
+    return when newlinePos >= 0 {
+        {status = parse_int(statusStr), body = bodyStr}
+    else {
+        {status = 0, body = raw}
+    }}
+}
+
+// Find first '\n' in string, return index or -1
+fun findNewline(s: String): Int = {
+    var pos = -1
+    var i = 0
+    for i < len(s) and pos == -1 {
+        val ch = substring(s, i, 1)
+        pos = when ch == "\n" { i else -1 }
+        i = i + 1
+    }
+    return pos
+}
+
+// ---- JSON helpers ----
+fun jsonEscape(s: String): String = {
+    var r = ""
+    var i = 0
+    for i < len(s) {
+        val ch = substring(s, i, 1)
+        val esc = when ch == "\"" { "\\\"" else when ch == "\\" { "\\\\" else when ch == "\n" { "\\n" else when ch == "\r" { "\\r" else when ch == "\t" { "\\t" else ch } } } } }
+        r = r + esc
+        i = i + 1
+    }
+    return r
+}
+
+fun buildJsonObj(parts: List[String]): String = {
+    var result = "{"
+    var i = 0
+    val n = len(parts)
+    for i < n {
+        val key = parts[i]
+        val value = parts[i + 1]
+        result = when i > 0 { result + ", " else result }
+        result = result + "\"" + jsonEscape(key) + "\": " + value
+        i = i + 2
+    }
+    return result + "}"
+}
+
+fun jsonString(s: String): String = "\"" + jsonEscape(s) + "\""
+
+fun jsonArray(items: List[String]): String = {
+    var result = "["
+    for item in items {
+        result = when result != "[" { result + ", " else result }
+        result = result + item
+    }
+    return result + "]"
+}
+
+// ---- String Helpers ----
+fun replaceOld(s: String, old: String, new: String): String = {
+    var result = ""
+    var i = 0
+    val oldLen = len(old)
+    for i < len(s) {
+        val inBounds = i + oldLen <= len(s)
+        val rest = when inBounds { substring(s, i, oldLen) else "" }
+        val matches = rest == old
+        val newPart = when matches { result + new else result + substring(s, i, 1) }
+        result = newPart
+        val newI = when matches { i + oldLen else i + 1 }
+        i = newI
+    }
+    return result
+}

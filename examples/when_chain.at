@@ -1,0 +1,9 @@
+// When condition chain examples (v7 syntax)
+fun main() {
+    val x = 15
+    when x < 0 { print("negative") else when x == 0 { print("zero") else print("positive") } }
+
+    // Nested when for multi-condition testing
+    val y = 50
+    when y < 25 { print("low") else when y < 75 { print("medium") else print("high") } }
+}

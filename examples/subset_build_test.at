@@ -1,0 +1,9 @@
+fun main() {
+    val s1 = Set["x"]
+    val s2 = Set["y"]
+    val r = set_is_subset(s1, s2)
+    print("subset: ")
+    print(r)
+    println("")
+    println("done")
+}

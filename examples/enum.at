@@ -1,0 +1,24 @@
+// Enum examples in Atomic
+
+// Simple enum without data
+enum Color { Red, Green, Blue }
+
+// Enum with data-carrying variants
+enum Option { Some(Int), None }
+
+fun main() {
+    // Simple enum construction and matching
+    val c = Red
+    when c {
+        Red -> print("Red")
+        Green -> print("Green")
+        _ -> print("Other")
+    }
+
+    // Data-carrying enum construction and destructuring
+    val s = Some(42)
+    when s {
+        Some(v) -> print(v)
+        None -> print("nothing")
+    }
+}

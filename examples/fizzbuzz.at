@@ -1,0 +1,14 @@
+// FizzBuzz in Atomic (v7 syntax)
+fun fizzbuzz(n) {
+    when n % 3 == 0 and n % 5 == 0 { "FizzBuzz" else when n % 3 == 0 { "Fizz" else when n % 5 == 0 { "Buzz" else toString(n) } } }
+}
+
+fun toString(n) {
+    // simple: just print the number via print
+    print(n)
+    ""
+}
+
+fun main() {
+    for i in 1..100 { println(fizzbuzz(i)) }
+}

@@ -1,0 +1,3735 @@
+# Atomic 语言设计文档
+
+**版本：5.0 | 状态：正式草案**
+
+---
+
+## 一、语言概述
+
+### 1.1 定位
+
+Atomic 是一门**偏函数式、无对象、静态类型、轻量 GC**的编程语言。
+
+名称「Atomic」取"不可分割、原子性"之意：**数据是不可分割的值，函数是不可分割的变换**。
+
+### 1.2 核心理念
+
+- **数据与行为分离**：用函数变换数据，而非用对象封装状态
+- **显式优于隐式**：错误处理、空值、副作用都在类型系统中可见
+- **表达式优先**：所有控制流都是表达式，均可以返回值
+- **正交性**：特性之间独立组合，不引入重复概念
+
+### 1.3 设计目标
+
+| 目标 | 说明 |
+|------|------|
+| 简洁 | 语法清晰，视觉噪音低，关键字少 |
+| 安全 | 编译时检查错误处理和空值 |
+| 可读 | 代码即文档，意图明确 |
+| 一致 | 相似概念用相似语法，降低学习成本 |
+
+### 1.4 明确拒绝的特性
+
+- 类、继承、this / self
+- null / undefined
+- 异常（throw / try-catch）
+- 隐式类型转换
+- 全局可变状态
+- while 循环（用 for 覆盖）
+- if 语句（用 when 覆盖所有分支）
+- 管道操作符（用链式调用代替）
+- 守卫关键字（用 when + continue 覆盖）
+- yield 关键字（用花括号表达式覆盖）
+- suspend / async / await 关键字（所有函数默认可挂起，协程结果自动收拢）
+
+### 1.5 语言特性速览
+
+| 特性 | 支持 | 说明 |
+|------|:--:|------|
+| 静态类型 | ✅ | 编译时类型检查 |
+| 类型推断 | ✅ | 局部变量、函数返回值 |
+| 代数数据类型 | ✅ | enum 定义和积类型 |
+| 结构体 | ✅ | 纯数据记录 |
+| 泛型 | ✅ | `<T>` 语法 |
+| 空安全 | ✅ | Option\<T\> 代替 null |
+| 错误处理 | ✅ | Result\<T, E\> 类型 + `?` 传播 |
+| 模式匹配 | ✅ | when 全覆盖检查 |
+| 高阶函数 | ✅ | 函数作为参数/返回值 |
+| 尾调用优化 | ✅ | 直接尾递归保证不爆栈 |
+| 扩展函数 | ✅ | UFCS 风格 |
+| 模块系统 | ✅ | import / export |
+| 协程 | ✅ | 结构化并发，无 suspend/await |
+| REPL | ✅ | 交互式环境 |
+
+---
+
+## 二、词法结构
+
+### 2.1 源文件
+
+- 文件扩展名：`.atom`
+- 源文件编码：UTF-8（无 BOM）
+- 换行符：LF 或 CRLF
+- 大小写敏感
+
+### 2.2 关键字
+
+```
+val    var    lazy   const   fun     return
+when   and   or    else    is      in
+for          break   continue
+enum   type   extension
+module import export as
+true   false  copy    
+launch coroutineScope delay withTimeout
+Task   unsafe external
+```
+
+保留但未使用：
+```
+not     match   case
+```
+```
+
+### 2.3 标识符
+
+```
+标识符 ::= [a-zA-Z_][a-zA-Z0-9_]*
+```
+
+- 函数名、变量名使用 `camelCase`
+- 类型名、枚举变体使用 `PascalCase`
+- 常量使用 `UPPER_SNAKE_CASE`（全大写 + 下划线）
+
+### 2.4 字面量
+
+```ebnf
+整数     ::= [0-9]+ | '0x' [0-9a-fA-F]+ | '0b' [01]+ | '0o' [0-7]+
+浮点数   ::= [0-9]+ '.' [0-9]+ ([eE] [+-]? [0-9]+)?
+布尔     ::= 'true' | 'false'
+字符串   ::= '"' 字符* '"'
+         | '"""' 多行字符* '"""'
+字符     ::= '\'' 单字符 '\''
+```
+
+### 2.5 分隔符与标点
+
+```
+(  )  {  }  [  ]  ,  ;  :  .  ..  ->
+=  +=  -=  *=  /=  %=
++  -  *  /  %  **
+==  !=  <  >  <=  >=
+and  or  !
+&  |  ^  ~  <<  >>
+?  ?.  ::  _
+```
+
+### 2.6 注释
+
+```kotlin
+// 单行注释
+
+/* 多行注释
+   可以跨多行 */
+
+/**
+ * 文档注释
+ * 用于生成 API 文档
+ * @param x 第一个操作数
+ * @return 计算结果
+ */
+```
+
+### 2.7 字符串操作
+
+#### 字符串拼接
+
+```kotlin
+val hello = "Hello"
+val world = "World"
+val message = hello + " " + world   // "Hello World"
+```
+
+#### 字符串插值
+
+字符串中使用 `${expression}` 进行插值，表达式可以是任意有效的 Atomic 表达式。不使用 `$name` 简写形式——所有插值必须用 `${}` 包裹。
+
+```kotlin
+// 基本用法
+val name = "张三"
+val msg = "Hello, ${name}"
+// → "Hello, 张三"
+
+// 表达式计算
+val a = 10
+val b = 20
+val result = "${a} + ${b} = ${a + b}"
+// → "10 + 20 = 30"
+
+// 方法调用
+val user = {name = "李四", age = 30}
+val desc = "用户：${user.name}，年龄：${user.age}"
+// → "用户：李四，年龄：30"
+
+// 复杂表达式
+val list  = List[1, 2, 3]
+val str = "列表和：${list.fold(0) { acc, x -> acc + x }}"
+// → "列表和：6"
+
+// 嵌套插值
+val outer = "外层 ${"内层 ${42}"}"
+// → "外层 内层 42"
+```
+
+#### 转义
+
+```kotlin
+// 使用 \$ 输出字面量 $
+val price = 100
+val str = "价格: \$${price}"
+// → "价格: $100"
+
+// 其他转义
+val str2 = "换行符: \n，制表符: \t"
+// → 换行符: 
+//    制表符:     
+```
+
+#### 多行字符串
+
+使用三引号 `"""` 定义多行字符串，保留换行。内部支持插值。
+
+**自动去除公共前导空格**：编译器以 `"""` 闭合符所在行的缩进量为基准，自动去除每行等量的前导空白。若某行空白不足，仅去除该行全部前导空白而不报错。
+
+```kotlin
+// 基本多行字符串
+val text = """
+    第一行
+    第二行
+    第三行
+    """
+
+// 带插值的多行字符串
+val name = "王五"
+val age = 25
+val json = """
+    {
+        "name": "${name}",
+        "age": ${age}
+    }
+    """
+
+// 模板使用
+val html = """
+    <html>
+        <body>
+            <h1>${title}</h1>
+            <p>${content}</p>
+        </body>
+    </html>
+    """
+```
+
+---
+
+## 三、类型系统
+
+### 3.1 类型分类
+
+| 类别 | 类型 | 说明 |
+|------|------|------|
+| 基本类型 | `Int` | 64位有符号整数 |
+| 基本类型 | `Float` | 64位浮点数（IEEE 754） |
+| 基本类型 | `Bool` | 布尔值：`true` / `false` |
+| 基本类型 | `Char` | Unicode 标量值（32位） |
+| 基本类型 | `String` | 不可变 UTF-8 字符串 |
+| 基本类型 | `Unit` | 空值类型，表示"无返回值"，字面量为 `{}` |
+| 复合类型 | `List<T>` | 同质不可变列表 |
+| 复合类型 | `Map<K,V>` | 同质不可变映射 |
+| 复合类型 | `Set<T>` | 同质不可变集合 |
+| 复合类型 | `(T1, T2, ...)` | 异质定长元组 |
+| 复合类型 | 结构体类型 | 命名记录的匿名结构类型 |
+| 复合类型 | `Range` | 整数范围 |
+| 代数类型 | `enum` | 带名称的标签联合 |
+| 函数类型 | `(T1, T2) -> R` | 函数类型 |
+| 并发类型 | `Task<T>` | 协程任务句柄，由 `launch` 返回 |
+| 并发类型 | `Stream<T>` | 协程间流式通讯通道 |
+| 惰性类型 | `LazyList<T>` | 惰性求值序列，元素按需生成 |
+| 工具类型 | `Date` | 日期（年/月/日） |
+| 工具类型 | `DateTime` | 日期时间（含时区） |
+| 工具类型 | `Random` | 随机数生成器 |
+| 泛型 | `T`, `K`, `V`, `E` 等 | 类型参数 |
+
+### 3.2 基本类型详表
+
+```kotlin
+// Int — 64位有符号整数
+val i: Int = 42
+val hex = 0xFF        // 255（十六进制）
+val bin = 0b1010      // 10（二进制）
+val oct = 0o77        // 63（八进制）
+
+// Float — IEEE 754 双精度
+val f: Float = 3.14
+val sci = 1.5e10      // 科学记数法
+
+// Bool
+val b: Bool = true
+val c = false
+
+// Char — Unicode 标量值
+val ch: Char = 'A'
+val emoji = '😀'
+val escape = '\n'     // 转义：\n \t \r \\ \' \" \0 \u{XXXXXX}
+
+// String — 不可变 UTF-8
+val s: String = "hello"
+val empty = ""
+```
+
+### 3.3 复合类型
+
+#### 3.3.1 列表 `List<T>`
+
+同质不可变列表。创建后不可修改，所有"修改"操作返回新列表。
+
+```kotlin
+// 字面量语法
+val list: List<Int>  = List[1, 2, 3]
+val empty: List<String> = List[]
+val nested = List[List[1, 2], List[3, 4]]
+
+// List.of() 函数——等价形式，便于泛型代码中使用
+val same = List.of(1, 2, 3)         // 等价于 List[1, 2, 3]
+fun <T> singleton(x: T): List<T> = List.of(x)
+```
+
+`List[...]` 和 `List.of(...)` 编译结果完全相同，可互换使用。`List.of()` 是普通函数，在泛型上下文中更自然。
+
+// 访问元素
+val first = list[0]          // 索引从 0 开始
+
+// 连接
+val combined  = List[1, 2]  + List[3, 4]  // List[1, 2, 3, 4]
+
+// 解构
+val [a, b, c]  = List[1, 2, 3]
+val [head, ...tail]  = List[1, 2, 3, 4]  // head = 1, tail  = List[2, 3, 4]
+```
+
+#### 3.3.2 映射 `Map<K,V>`
+
+同质不可变键值映射。
+
+```kotlin
+val map: Map<String, Int> = Map["a": 1, "b": 2]
+val empty: Map<String, Bool> = Map[]
+
+// 访问
+val v = map["a"]          // 返回 Option<Int>: Some(1)
+val v2 = map["nonexist"]  // 返回 Option<Int>: None
+
+// 插入/更新返回新 Map
+val m2 = map.insert("c", 3)
+val m3 = map.remove("a")
+```
+
+#### 3.3.3 集合 `Set<T>`
+
+同质不可变集合，元素唯一。
+
+```kotlin
+val set: Set<Int> = Set[1, 2, 3]
+val empty: Set<String> = Set[]
+
+// 空集合各有明确的类型前缀，无需上下文推断：
+// List[] / Map[] / Set[] 各自由类型前缀唯一确定
+
+// 操作返回新 Set
+val s2 = set.insert(4)
+val s3 = set.remove(2)
+val has = set.contains(1)   // true
+```
+
+#### 3.3.4 元组 `(T1, T2, ...)`
+
+异质定长数据组合。
+
+```kotlin
+val pair: (Int, String) = (42, "hello")
+val triple = (1, true, "ok")
+
+// 访问（索引从 0 开始）
+val n = pair.0      // 42
+val s = pair.1      // "hello"
+
+// 解构
+val (x, y) = pair       // x = 42, y = "hello"
+val (a, _, c) = triple  // _ 丢弃第二个元素
+
+// 命名元组（语法糖，编译后仍为位置访问）
+val person = (name: "张三", age: 30)
+val name = person.name   // "张三"
+val age = person.1       // 30（位置访问仍可用）
+
+// `to` 中缀函数创建元组
+val p = 1 to "hello"          // (1, "hello")
+val t = 1 to "hello" to true  // (1, "hello", true) — 自动展平，非嵌套
+```
+
+**`to` 中缀函数**：`to` 是普通函数 `fun <A, B> to(a: A, b: B): (A, B)`，支持中缀调用。`a to b` 等价于 `to(a, b)`。链式 `a to b to c` 编译为 `to(to(a, b), c)`，编译器识别元组+值的模式自动展平为 `(a, b, c)`，不会产生嵌套元组。
+
+与 Kotlin Pair/Triple 的对比：
+
+```
++------------------+---------------------------+----------------------------+
+| 特性             | Kotlin                    | Atomic                     |
++------------------+---------------------------+----------------------------+
+| 二元组           | Pair(a, b) 或 a to b      | (a, b) 或 a to b           |
+| 三元组           | Triple(a, b, c)           | (a, b, c) 或 a to b to c   |
+| N元组            | 无（需嵌套 Pair）          | 原生支持 (a, b, c, ...)    |
+| 类型表示         | Pair<A,B> / Triple<A,B,C> | (A, B) / (A, B, C)         |
+| 命名元组         | 不支持                    | (name: val, age: 30)       |
+| to 链式自动展平  | 不展平 a to b to c        | 自动展平为 (a, b, c)       |
+|                 | = ((a, b), c)             |                            |
++------------------+---------------------------+----------------------------+
+```
+
+#### 3.3.5 范围 `Range`
+
+表示整数区间，用于循环和模式匹配。
+
+```kotlin
+val r: Range = 0..10    // 包含 0 到 10（含两端）
+val r2 = 0..<10         // 包含 0 到 9（不含右端）
+
+// 检查包含
+val digit = when x in 0..9 { true else false }
+```
+
+#### 3.3.6 结构体类型（匿名记录）
+
+结构体是匿名记录类型，由字段签名定义。
+
+```kotlin
+// 定义结构体类型（使用 type 别名）
+type Point = {x: Int, y: Int}
+type Person = {name: String, age: Int}
+
+// 创建结构体字面量（注意：用 = 赋值字段）
+val p: Point = {x = 10, y = 20}
+val person = {name = "张三", age = 30}
+
+// 访问字段
+val px = p.x
+val name = person.name
+
+// 结构体类型是结构等价的（同样字段名+类型即为相同类型）
+// 即使 type 别名不同，字段签名相同即为同一类型
+```
+
+#### 3.3.7 惰性列表 `LazyList<T>`
+
+惰性求值序列，元素按需逐个生成。适合无限序列、大数据流水线等场景。与 `Stream<T>` 的区别：`LazyList<T>` 是同步按需生成的纯数据，`Stream<T>` 是协程间异步通讯通道。
+
+```kotlin
+// 从种子和递推函数构造
+val naturals: LazyList<Int> = lazyList(0) { it + 1 }
+// → 0, 1, 2, 3, 4, ...（按需生成）
+
+val powers: LazyList<Int> = lazyList(1) { it * 2 }
+// → 1, 2, 4, 8, 16, ...
+
+// 从已有列表转换
+val lazy  = List[1, 2, 3].toLazyList()
+
+// 所有变换操作都是惰性的——不生成中间列表
+val result = naturals
+    .filter { it % 2 == 0 }    // 惰性过滤
+    .map { it * it }            // 惰性映射
+    .take(5)                    // 惰性取前 5 个
+    .toList()                  // 强制求值 → List[0, 4, 16, 36, 64]
+```
+
+**核心原则**：`LazyList<T>` 上的 `map`、`filter`、`take`、`drop` 等操作均不立即执行，仅在调用 `.toList()` 或遍历时才按需计算。
+
+### 3.4 函数类型
+
+```kotlin
+// 语法：(参数类型列表) -> 返回值类型
+type IntMapper = (Int) -> Int
+type BinOp = (Int, Int) -> Int
+type NoArgs = () -> String
+type MultiRet = (Int) -> (Int, Int)
+```
+
+### 3.5 类型推断规则
+
+| 语境 | 推断规则 |
+|------|----------|
+| `val x = expr` | x 的类型 = expr 的类型 |
+| `fun f(...) { body }` | 返回类型 = body 最后一表达式类型 |
+| `List[1, 2, 3]` | `List<Int>`（元素类型的最小上界） |
+| Lambda `{ it * 2 }` | 从上下文期望的类型推导参数类型 |
+| `when ... { ... }` | 所有分支返回类型的并集 |
+
+**最小上界（LUB）规则**：
+
+- 同质元素：`List[1, 2, 3]` → `List<Int>`
+- 数值提升：`List[1, 1.5, 3]` 中 `Int` 自动提升为 `Float` → `List<Float>`
+- 无公共上界：`List[1, "hello"]` → **编译错误**，`Int` 与 `String` 无公共类型
+- 枚举变体：`List[Some(1), None]` → `List<Option<Int>>`，所有变体同属一个枚举
+- 结构体：`List[{x=1}, {x=2, y=3}]` → 若有公共字段签名则为其上界，否则编译错误
+
+### 3.6 类型安全保证
+
+- `T` 类型的变量**永远有值**，可直接使用
+- `Option<T>` 类型的变量**必须先解包**（用 `when` 或 `?.`）才能使用内部值
+- `Result<T, E>` 类型的变量**必须先处理错误**才能使用成功值
+- **没有 `null`**，不存在空指针异常
+- `when` 匹配枚举时，编译器**检查是否覆盖所有变体**（穷尽性检查）
+- 无隐式类型转换，所有转换必须显式调用转换函数
+
+---
+
+## 四、表达式与运算符
+
+### 4.1 运算符优先级
+
+从高到低排列：
+
+| 优先级 | 运算符 | 结合性 |
+|:--:|------|:--:|
+| 1 | `()` 调用，`[]` 索引，`.` 字段访问，`?.` 安全调用 | 左 |
+| 2 | `!` 逻辑非，`~` 按位非，`-` 一元负 | 右 |
+| 3 | `**` 幂运算 | 右 |
+| 4 | `*` `/` `%` | 左 |
+| 5 | `+` `-` | 左 |
+| 6 | `<<` `>>` | 左 |
+| 7 | `..` `..<` 范围 | — |
+| 8 | `&` 按位与 | 左 |
+| 9 | `^` 按位异或 | 左 |
+| 10 | `\|` 按位或 | 左 |
+| 11 | `in` 包含检查 | — |
+| 12 | `is` 类型检查 | — |
+| 13 | `==` `!=` `<` `>` `<=` `>=` | 左 |
+| 14 | `and` 逻辑与 | 左 |
+| 15 | `or` 逻辑或 | 左 |
+| 16 | `=` `+=` `-=` `*=` `/=` `%=` | 右 |
+| 17 | `,` 逗号（元组、参数列表） | 左 |
+
+### 4.2 算术运算符
+
+```kotlin
+a + b     // 加法
+a - b     // 减法
+a * b     // 乘法
+a / b     // 除法（Int/Int → Int，截断向零；Float/Float → Float）
+a % b     // 取模（符号与被除数相同）
+a ** b    // 幂运算（a 的 b 次方，返回 Float）
+-a        // 一元负
+```
+
+### 4.3 比较运算符
+
+```kotlin
+a == b    // 等于（结构相等，非引用相等）
+a != b    // 不等于
+a < b     // 小于
+a > b     // 大于
+a <= b    // 小于等于
+a >= b    // 大于等于
+```
+
+### 4.4 逻辑运算符
+
+```kotlin
+a and b    // 逻辑与（短路求值）
+a or b     // 逻辑或（短路求值）
+!a        // 逻辑非
+```
+
+### 4.5 位运算符
+
+```kotlin
+a & b     // 按位与
+a | b     // 按位或
+a ^ b     // 按位异或
+~a        // 按位非
+a << b    // 左移
+a >> b    // 算术右移（保留符号位）
+```
+
+### 4.6 赋值运算符
+
+`=` 用于变量绑定（`val`/`var`）和赋值（`var`）。
+
+```kotlin
+val x = 10           // 不可变绑定
+var y = 20           // 可变绑定
+y = 30               // 重新赋值（仅 var）
+
+// 复合赋值（仅 var）
+y += 1    // y = y + 1
+y -= 5    // y = y - 5
+y *= 2    // y = y * 2
+y /= 3    // y = y / 3
+y %= 4    // y = y % 4
+```
+
+### 4.7 其他运算符
+
+```kotlin
+// 范围
+0..10      // 包含 0 到 10
+0..<10     // 包含 0 到 9
+
+// 成员检查
+x in 0..9          // x 是否在范围内
+x in List[1, 2, 3]     // x 是否在列表中
+x in set            // x 是否在集合中
+
+// 类型检查
+x is Int            // x 是否是 Int 类型
+x is Some           // x 是否是 Some 变体
+
+// 函数引用
+::add               // 引用命名函数 add
+::Person.name       // 引用 Person 的 name 字段（getter 函数）
+List::map           // 引用 List 扩展函数 map
+
+// 安全调用
+value?.method()     // 若 value 是 Ok/Some 则调用，否则传播错误
+```
+
+### 4.8 表达式块
+
+块 `{ ... }` 本身是表达式，其值为最后一个表达式的值。分号 `;` 用于在同一行分隔多个表达式。
+
+```kotlin
+val result = {
+    val x = 10
+    val y = 20
+    x + y            // 块的值
+}
+// result = 30
+
+// 分号用于单行多表达式
+val inc = { var x = 0; { x = x + 1; x } }
+```
+
+### 4.9 运算符重载
+
+Atomic **不支持用户自定义运算符重载**。`+`、`==` 等运算符的行为由编译器内置定义：
+
+- `List[1, 2] + List[3, 4]` → 列表连接（编译器内置）
+- `a == b` → 结构相等比较（编译器对每种类型生成）
+- `a < b` → 仅对 `Int`、`Float`、`Char` 等可比较类型有效
+
+理由：运算符重载引入隐式行为和可读性风险，与语言的显式哲学冲突。需要自定义比较或组合逻辑时，定义具名函数。
+
+---
+
+## 五、变量绑定与模式
+
+### 5.1 变量绑定
+
+```kotlin
+// 不可变绑定（默认推荐）
+val x = 10
+val name = "张三"
+
+// 可变绑定（需显式标注）
+var count = 0
+count = count + 1
+
+// 惰性求值（首次访问时计算并缓存，之后直接返回缓存值）
+lazy val config = readConfigFile()   // 声明时不计算
+// ... config 在首次访问时才执行 readConfigFile()
+val db = connect(config)               // 此处 config 被求值并缓存
+
+// 编译时常量（必须在编译时可求值）
+const PI = 3.14159
+const MAX_SIZE = 1024
+
+// 带类型注解
+val x: Int = 10
+var y: Float = 3.14
+const VERSION: String = "1.0.0"
+```
+
+### 5.2 错误传播绑定
+
+`?` 后缀用于 `val` 和 `var`，表示错误传播语义。右侧必须是 `Result<T,E>` 或 `Option<T>` 类型。
+
+```kotlin
+// val? — 不可变 + 错误传播
+val x? = parseInt("123")    // x 的类型是 Int（已解包成功值）
+                              // 若 parseInt 返回 Err，当前函数提前返回 Err
+
+// var? — 可变 + 错误传播
+var y? = parseInt("456")    // y 的类型是 Int
+
+// 错误传播的前提：外层函数返回 Result 或 Option
+fun compute(): Result<Int, String> {
+    val x? = parseInt("10")     // 若失败，compute 返回 Err(...)
+    val y? = parseInt("20")     // 同上
+    return Ok(x + y)
+}
+```
+
+**类型兼容规则**：
+- 当 `?` 绑定的表达式是 `Result<T, E>`，外层函数必须返回 `Result<*, E>`（错误类型兼容）
+- 当 `?` 绑定的表达式是 `Option<T>`，外层函数必须返回 `Option<*>` 或 `Result<*, E>`（其中 E 需可从 None 构造）
+
+### 5.3 模式解构
+
+模式解构可用于 `val`、`var` 和 `when` 分支。
+
+```kotlin
+// 元组解构
+val (x, y) = (10, 20)
+val (a, _, c) = (1, 2, 3)    // _ 丢弃中间元素
+
+// 列表解构
+val [first, second]  = List[1, 2, 3]     // first = 1, second = 2 (其余忽略)
+val [head, ...rest]  = List[1, 2, 3, 4]   // head = 1, rest  = List[2, 3, 4]
+val [...] = list                      // 匹配任意列表
+
+// 结构体解构
+type Point = {x: Int, y: Int}
+val {x, y} = point             // x = point.x, y = point.y
+val {x as px, y as py} = point // px = point.x, py = point.y（重命名）
+
+// 嵌套解构
+val (a, (b, c)) = (1, (2, 3))
+val [{x, y}, {x as x2, y as y2}] = List[point1, point2]
+```
+
+**解构语法不可互换**：元组解构必须用圆括号 `val (a, b) = tuple`，结构体解构必须用花括号 `val {x, y} = struct`。两者对应不同的数据结构和字段访问方式——元组按位置索引（`.0`、`.1`），结构体按字段名访问（`.x`、`.y`）。混用将产生编译错误。
+
+### 5.4 通配符模式 `_`
+
+`_` 匹配任意值并丢弃，用于不需要绑定的位置。
+
+```kotlin
+// 在 when 中
+when pair {
+    (0, _) -> "x is zero"
+    (_, 0) -> "y is zero"
+    else -> "neither zero"
+}
+
+// 在 val 解构中
+val (_, value) = (42, "hello")    // value = "hello"
+
+// 在 lambda 参数中
+val alwaysOne = { _ -> 1 }
+List[1, 2, 3].map(alwaysOne)   // List[1, 1, 1]
+```
+
+---
+
+## 六、函数
+
+### 6.1 命名函数
+
+```kotlin
+// 完整形式
+fun add(x: Int, y: Int): Int {
+    return x + y
+}
+
+// 单表达式体（省略大括号和 return）
+fun add(x: Int, y: Int): Int = x + y
+
+// 省略返回类型（类型推断）
+fun add(x: Int, y: Int) = x + y
+
+// 无参数
+fun greet(): String = "Hello"
+
+// 无返回值（返回 Unit，即空值 {}）
+fun printTwice(s: String) {
+    println(s)
+    println(s)
+}
+```
+
+#### 程序入口
+
+Atomic 程序的入口是 `main` 函数，位于项目根模块。`main` 无参数，返回 `Unit`。
+
+```kotlin
+// main.atom
+fun main() {
+    println("Hello, Atomic!")
+}
+```
+
+编译器从 `main` 开始执行。REPL 模式下不需要 `main` 函数。
+
+### 6.2 函数类型语法
+
+```kotlin
+// 基本函数类型
+type IntFn = (Int) -> Int
+type BinFn = (Int, Int) -> Int
+type NoArgFn = () -> String
+
+// 高阶函数类型
+type Transform = ((Int) -> Int, Int) -> Int
+type FnGen = (Int) -> (Int) -> Int    // 柯里化
+```
+
+### 6.3 匿名函数（Lambda）
+
+```kotlin
+// 完整形式：fun(参数列表) 体
+val double = fun(x: Int): Int { return x * 2 }
+
+// 花括号简写：{ 参数列表 -> 体 }
+val double = { x: Int -> x * 2 }
+
+// 单参数省略形式：默认名称为 it
+val double: (Int) -> Int = { it * 2 }
+
+// 多参数
+val add: (Int, Int) -> Int = { x, y -> x + y }
+
+// 无参数
+val answer = { 42 }
+
+// 多行 lambda
+val process = { x: Int ->
+    val doubled = x * 2
+    val squared = doubled ** 2
+    squared / 2
+}
+
+// 忽略参数
+val ignore = { _ -> 42 }     // 任意输入返回 42
+val ignore2: (Int, String) -> Int = { _, _ -> 42 }
+```
+
+### 6.4 函数引用 `::`
+
+```kotlin
+// 引用命名函数
+fun double(x: Int): Int = x * 2
+val f = ::double             // f: (Int) -> Int
+
+// 引用扩展函数
+val toStr = Int::toString   // toStr: (Int) -> String
+
+// 引用结构体字段（作为 getter 函数）
+val getName = Person::name  // getName: (Person) -> String
+
+// 使用函数引用
+List[1, 2, 3].map(::double)    // List[2, 4, 6]
+List[1, 2, 3].map(Int::toString).map(String::len)  // List[1, 1, 1]
+	// 重载函数的引用——必须用类型注解消歧（详见 §6.9）
+	val addInts: (Int, Int) -> Int = ::add
+```
+
+### 6.5 Lambda 外提语法糖
+
+当函数最后一个参数是 lambda 时，可将 lambda 写在括号外。
+
+```kotlin
+// 原始写法
+map({ it * 2 }, List[1, 2, 3])
+
+// lambda 外提
+map(List[1, 2, 3]) { it * 2 }
+
+// 仅 lambda 参数时可省略括号
+List[1, 2, 3].map { it * 2 }
+
+// 多行 lambda 外提
+List[1, 2, 3].map { x ->
+    val doubled = x * 2
+    doubled + 1
+}
+
+// 链式调用中的外提
+List[1, 2, 3, 4, 5]
+    .filter { it % 2 == 0 }
+    .map { it * it }
+    .fold(0) { acc, x -> acc + x }
+```
+
+### 6.6 闭包
+
+Lambda 捕获外部变量时形成闭包。捕获通过引用计数管理生命周期。
+
+```kotlin
+fun makeCounter(): () -> Int {
+    var count = 0
+    return { count = count + 1; count }
+}
+
+val counter = makeCounter()
+counter()  // 1
+counter()  // 2
+
+fun makeAdder(x: Int): (Int) -> Int {
+    return { y -> x + y }    // 捕获 x（不可变）
+}
+
+val add5 = makeAdder(5)
+add5(10)  // 15
+```
+
+**捕获语义**：
+- 不可变变量 `val`：捕获值（可复制基本类型，RC 管理引用类型）
+- 可变变量 `var`：捕获引用（所有闭包共享同一可变位置）
+
+### 6.7 尾调用优化（TCO）
+
+编译器保证对**直接尾递归**进行优化，将递归编译为循环。
+
+```kotlin
+// TCO 保证：直接尾递归
+fun sum(n: Int, acc: Int): Int {
+    return when n == 0 { acc else sum(n - 1, acc + n) }
+}
+
+// TCO 保证：尾调用另一个函数
+fun g(x: Int): Int = x + 1
+fun f(x: Int): Int = g(x)   // 尾调用 g
+
+// 不保证 TCO：非尾位置递归
+fun fib(n: Int): Int {
+    return when n <= 1 { n else fib(n - 1) + fib(n - 2) }
+}
+```
+
+### 6.8 泛型函数
+
+```kotlin
+// 泛型函数定义
+fun map<A, B>(f: (A) -> B, list: List<A>): List<B> {
+    val result = List[]
+    for item in list {
+        result = result + List[f(item)]
+    }
+    return result
+}
+
+// 类型参数可推断时省略
+val doubled = map({ it * 2 }, List[1, 2, 3])   // A=Int, B=Int 由编译器推断
+
+// 显式指定类型参数
+val strings = map<Int, String>(Int::toString, List[1, 2, 3])
+```
+
+### 6.9 函数重载
+
+同一作用域内允许定义多个同名函数，按参数类型区分。仅靠返回类型不同不足以构成重载。
+
+```kotlin
+// 同名函数，参数类型不同
+fun add(a: Int, b: Int): Int = a + b
+fun add(a: Float, b: Float): Float = a + b
+fun add(a: String, b: String): String = a + b
+
+// 调用——编译器根据参数类型自动选择
+add(1, 2)          // → Int 版本
+add(1.5, 2.3)      // → Float 版本
+add("a", "b")      // → String 版本
+```
+
+#### 重载解析规则
+
+优先级从高到低：
+
+| 优先级 | 规则 | 说明 |
+|:--:|------|------|
+| 1 | 精确匹配 | 参数类型完全匹配某一个重载 |
+| 2 | 具体优于泛型 | 非泛型重载优先于泛型重载（`foo(Int)` 优先于 `foo<T>(T)`） |
+| 3 | 单义推断 | 仅一个重载可通过类型推断匹配 |
+| 4 | 编译错误 | 存在歧义时拒绝编译，要求显式消歧 |
+
+```kotlin
+fun <T> process(x: T): String = "generic: $x"
+fun process(x: Int): String = "int: $x"
+
+process(42)    // → "int: 42"（具体类型优于泛型）
+process("hi")  // → "generic: hi"（无具体类型匹配，回退到泛型）
+```
+
+```kotlin
+fun process(x: Int): String = "int: $x"
+fun process(x: Float): String = "float: $x"
+fun process(x: String): String = "str: $x"
+
+// 精确匹配——没问题
+process(42)           // process(Int)
+process(3.14)         // process(Float)
+process("hello")      // process(String)
+
+// 歧义——编译错误
+fun describe(n: Int): String = "数量: $n"
+fun describe(n: Float): String = "数量: $n"
+describe(42)          // Error: 歧义，Int 同时匹配自身和 Float（Int 可转为 Float）
+                      // Fix: describe(42 as Int) 或 describe(42.0)
+```
+
+#### 仅返回类型不同 → 编译错误
+
+```kotlin
+fun parse(x: String): Int = ...       // 参数 (String) → Int
+fun parse(x: String): Float = ...     // Error: 仅返回类型不同，无法消歧
+// 重载必须靠参数类型区分，返回类型不参与解析
+```
+
+#### 函数引用消歧
+
+重载函数的引用必须通过类型注解显式消歧：
+
+```kotlin
+// ::add 是歧义的——必须标注类型
+val addInts: (Int, Int) -> Int = ::add        // 选择 add(Int, Int)
+val addFloats: (Float, Float) -> Float = ::add // 选择 add(Float, Float)
+
+// 直接传递时由上下文推断
+List[1, 2, 3].fold(0) { acc, x -> add(acc, x) }  // 推断为 add(Int, Int)
+```
+
+#### 跨模块重载
+
+```kotlin
+// math.atom
+module math {
+    export fun add(a: Int, b: Int): Int = a + b
+    export fun add(a: Float, b: Float): Float = a + b
+}
+
+// main.atom
+import math.{add}
+
+add(1, 2)     // math.add(Int, Int)
+add(1.5, 2.3) // math.add(Float, Float)
+
+// 跨模块函数引用同样需要消歧
+val f: (Int, Int) -> Int = ::add
+```
+
+---
+
+## 七、控制流
+
+### 7.1 分支表达式 `when`
+
+`when` 是 Atomic **唯一**的分支表达式，覆盖二分支、多分支、值匹配、类型匹配、结构匹配等所有场景。注意：**Atomic 没有 `if` 关键字**。
+
+**条件不加括号。** 核心语法规则：
+
+- **二分支**：`when 条件 { 真分支 else 假分支 }`
+- **多分支**：`when 条件 { 模式 -> 表达式, ... }`
+- **条件链**：`when { 模式 -> 表达式, ... }`
+
+`{ a else b }` 是 `{ true -> a, false -> b }` 的语法糖。`else` 在花括号内有双重角色：前面没有 `->` 时是二分支的真假分隔符；前面有 `->` 时是兜底模式标签。
+
+**`else` 绑定规则**：`else` 始终绑定到**最近的外层 `when`**。内层 `when` 的 `else` 不会泄漏到外层：
+
+```kotlin
+when x > 0 {
+    when y > 0 { "both" else "x only" }  // 内层 else 绑定到 when y > 0
+    else "x <= 0"                         // 外层 else 绑定到 when x > 0
+}
+```
+
+#### 单行二分支
+
+```kotlin
+val max = when a > b { a else b }
+val abs = when x < 0 { -x else x }
+val status = when age >= 18 { "adult" else "minor" }
+```
+
+#### 多行值匹配
+
+```kotlin
+val desc = when x {
+    0 -> "zero"
+    1 -> "one"
+    2 -> "two"
+    else -> "many"
+}
+```
+
+#### 多条件共享（或匹配）
+
+```kotlin
+val isVowel = when c {
+    'a', 'e', 'i', 'o', 'u' -> true
+    else -> false
+}
+```
+
+#### 多行条件链
+
+```kotlin
+val grade = when {
+    score >= 90 -> "A"
+    score >= 80 -> "B"
+    score >= 70 -> "C"
+    score >= 60 -> "D"
+    else -> "F"
+}
+```
+
+#### 类型匹配
+
+```kotlin
+val typeName = when value {
+    is Int -> "integer"
+    is String -> "string"
+    is List -> "list"
+    is Bool -> "boolean"
+    else -> "unknown"
+}
+```
+
+#### 枚举/变体匹配（带参数解构）
+
+```kotlin
+val result = when opt {
+    Some(x) -> "value: " + toString(x)
+    None -> "empty"
+}
+
+val area = when shape {
+    Circle(r) -> 3.14159 * r * r
+    Rectangle(w, h) -> w * h
+    Square(s) -> s * s
+}
+```
+
+#### 范围匹配
+
+```kotlin
+val category = when x {
+    in 0..9 -> "digit"
+    in 10..99 -> "two-digit"
+    in 100..999 -> "three-digit"
+    else -> "many digits"
+}
+```
+
+#### 模式匹配（解构 + 嵌套）
+
+```kotlin
+// 元组匹配
+val desc = when pair {
+    (0, 0) -> "origin"
+    (0, _) -> "on y-axis"
+    (_, 0) -> "on x-axis"
+    else -> "elsewhere"
+}
+
+// 嵌套匹配
+val info = when opt {
+    Some({x = 0, y = 0}) -> "origin"
+    Some({x, y}) -> "point at ($x, $y)"
+    None -> "no point"
+}
+```
+
+#### 组合使用
+
+```kotlin
+val analysis = when value {
+    is Int and value > 0 -> "positive int"
+    is Int and value < 0 -> "negative int"
+    is Int -> "zero"
+    is String and value in List["yes", "y"] -> "affirmative"
+    is String -> "text: " + value
+    else -> "unknown"
+}
+
+// 注意：`when` 后可接条件，用于细化匹配
+```
+
+#### 单行语句用法（无返回值）
+
+```kotlin
+// 在循环中用作 guard
+for item in list {
+    when item < 0 { continue }
+    when item == 0 { break }
+    println(item)
+}
+
+// 提前返回
+fun validate(age: Int): Result<Int, String> {
+    when age < 0 { return Err("age must be non-negative") }
+    when age > 150 { return Err("age unrealistic") }
+    return Ok(age)
+}
+```
+
+#### 嵌套 when
+
+```kotlin
+val result = when x > 0 {
+    when x > 100 { "large" else "small" }
+    else "non-positive"
+}
+```
+
+#### 穷尽性检查
+
+`when` 匹配枚举时，编译器强制覆盖所有变体。遗漏变体产生编译错误。
+
+```kotlin
+// 编译错误：缺少 None 分支
+val x = when opt {     // Error: non-exhaustive match
+    Some(v) -> v
+}
+// 修复：添加 else 或 None 分支
+```
+
+**`else` 的双重角色**：`else` 既是兜底分支，也是穷尽性检查的"安全网"。即使写了 `else`，编译器仍会检查显式分支是否已覆盖所有现有变体——这确保未来枚举新增变体时，`else` 不会悄悄吞掉本应显式处理的逻辑。
+
+**二分支自动穷尽**：`when Bool条件 { a else b }` 覆盖 `true` 和 `false`，编译器将 `{ a else b }` 展开为 `{ true -> a, false -> b }` 后执行常规穷尽性检查。
+
+### 7.2 循环 `for`
+
+`for` 是 Atomic **唯一**的循环关键字，覆盖遍历、条件循环、无限循环等所有场景。**Atomic 没有 `while` 关键字**。
+
+**条件不加括号。循环体始终使用花括号 `{ }`，单行也不例外。**
+
+#### 遍历集合
+
+```kotlin
+for item in list {
+    println(item)
+}
+
+// 单行（仍用花括号）
+for item in list { println(item) }
+
+// 带索引
+for (i, item) in list.withIndex() {
+    println("$i: $item")
+}
+
+// 遍历 Map
+for (key, value) in map {
+    println("$key -> $value")
+}
+```
+
+#### 范围循环
+
+```kotlin
+for i in 0..10 {
+    println(i)
+}
+
+for i in 0..<n { process(i) }
+```
+
+#### 条件循环（替代 while）
+
+```kotlin
+var i = 0
+for i < 10 {
+    println(i)
+    i = i + 1
+}
+```
+
+#### 无限循环
+
+```kotlin
+for {
+    val cmd = readLine()
+    when cmd == "quit" { break }
+    process(cmd)
+}
+```
+
+#### 循环控制
+
+```kotlin
+for item in list {
+    when item < 0 { continue }   // 跳过当前迭代
+    when item == 999 { break }   // 退出循环
+    println(item)
+}
+```
+
+#### for 表达式（列表推导）
+
+`for` 用作表达式时，每次迭代体块的最后一个表达式被收集，生成新列表。使用 `continue` 跳过当前元素。**`for` 表达式是同步、立即求值的**——所有迭代在当前线程顺序执行，结果列表一次性返回。
+
+```kotlin
+// 基本映射
+val squares = for x in List[1, 2, 3, 4, 5] { x * x }
+// → List[1, 4, 9, 16, 25]
+
+// 带过滤（when + continue）
+val evens = for x in List[1, 2, 3, 4, 5] {
+    when x % 2 == 0 { x * x else continue }
+}
+// → List[4, 16]
+
+// 多源（笛卡尔积）
+val pairs = for x in List[1, 2], y in List[3, 4] { (x, y) }
+// → List[(1, 3), (1, 4), (2, 3), (2, 4)]
+
+// 多源 + 过滤
+val filtered = for x in List[1, 2, 3], y in List[3, 4, 5] {
+    when x + y > 5 { (x, y) else continue }
+}
+// → List[(2, 4), (3, 3), (3, 4), (3, 5)]
+
+// 复杂变换
+val fizzbuzz = for i in 1..100 {
+    when {
+        i % 15 == 0 -> "FizzBuzz"
+        i % 3 == 0  -> "Fizz"
+        i % 5 == 0  -> "Buzz"
+        else -> toString(i)
+    }
+}
+```
+
+**设计说明**：`for` 表达式与 `map`/`filter` 链式调用语义等价。单源简单场景推荐链式调用，多源或复杂逻辑推荐 `for` 表达式。
+
+**`break` 与 `continue` 在 for 表达式中的语义**：`continue` 跳过当前元素（不加入结果列表）；`break` 立即终止整个 for 表达式，**已收集的元素全部丢弃**，返回空列表 `List[]`。若需保留已收集元素，使用条件过滤替代 `break`。
+
+---
+
+## 八、枚举与代数数据类型
+
+### 8.1 枚举定义
+
+`enum` 定义代数数据类型，声明一组有穷的变体。枚举是纯数据，不包含方法。
+
+```kotlin
+// 无参数枚举
+enum Color {
+    Red
+    Green
+    Blue
+}
+
+// 带参数枚举（代数数据类型）
+enum Option<T> {
+    Some(T)
+    None
+}
+
+enum Result<T, E> {
+    Ok(T)
+    Err(E)
+}
+
+// 带命名参数
+enum Shape {
+    Circle(r: Float)
+    Rectangle(w: Float, h: Float)
+    Square(s: Float)
+}
+
+// 混合参数
+enum Tree<T> {
+    Leaf(T)
+    Node(left: Tree<T>, right: Tree<T>)
+}
+
+// 混合无参/有参变体
+enum Action {
+    Quit
+    Move(x: Int, y: Int)
+    Write(s: String)
+    Error(code: Int, msg: String)
+}
+```
+
+### 8.2 枚举值构造
+
+```kotlin
+val red = Color.Red
+val opt = Some(42)
+val shape = Circle(r = 5.0)
+val action = Move(x = 10, y = 20)
+
+// 当上下文明确时，可省略枚举名
+val color: Color = Red
+```
+
+### 8.3 枚举模式匹配
+
+```kotlin
+// 变体匹配
+val name = when color {
+    Red -> "红色"
+    Green -> "绿色"
+    Blue -> "蓝色"
+}
+
+// 参数解构
+val area = when shape {
+    Circle(r) -> 3.14159 * r * r
+    Rectangle(w, h) -> w * h
+    Square(s) -> s * s
+}
+
+// 嵌套匹配
+val leafValue = when tree {
+    Leaf(v) -> v
+    Node(left, right) -> -1   // 非叶子返回哨兵值
+}
+
+// 带守卫的匹配
+val description = when action {
+    Move(x, y) and x > 0 and y > 0 -> "moving forward"
+    Move(x, y) -> "moving"
+    Quit -> "quitting"
+    Write(s) -> "writing: " + s
+    Error(404, _) -> "not found"
+    Error(code, msg) -> "error $code: $msg"
+}
+```
+
+### 8.4 枚举常用模式
+
+```kotlin
+// 递归枚举
+enum List_<T> {
+    Cons(head: T, tail: List_<T>)
+    Nil
+}
+
+fun <T> length(list: List_<T>): Int {
+    return when list {
+        Nil -> 0
+        Cons(_, tail) -> 1 + length(tail)
+    }
+}
+
+// Option 链式处理
+fun divide(a: Int, b: Int): Option<Int> {
+    return when b == 0 { None else Some(a / b) }
+}
+
+val result = divide(10, 2)
+    ?.map { it * 2 }
+    ?.map(Int::toString)
+```
+
+---
+
+## 九、结构体
+
+### 9.1 结构体类型定义
+
+结构体是匿名记录类型，使用 `type` 创建别名。
+
+```kotlin
+type Point = {x: Int, y: Int}
+type Person = {name: String, age: Int}
+type Rectangle = {origin: Point, size: {w: Int, h: Int}}
+```
+
+结构体类型是**结构等价**的：两个结构体类型只要字段名和字段类型完全相同，即为同一类型，无论 `type` 别名是否相同。
+
+### 9.2 结构体字面量
+
+创建结构体时使用 `=` 分隔字段名和值（注意：与类型定义中的 `:` 不同）。
+
+```kotlin
+val p = {x = 10, y = 20}
+val person = {name = "张三", age = 30}
+
+// 类型注解可选
+val p: Point = {x = 10, y = 20}
+
+// 嵌套结构体
+val rect = {origin = {x = 0, y = 0}, size = {w = 100, h = 200}}
+
+// 字段名简写（当变量名与字段名相同时）
+val x = 10
+val y = 20
+val p2 = {x, y}           // 等价于 {x = x, y = y}
+
+// 带默认值的类型无默认值语法——所有字段必须显式提供
+```
+
+### 9.3 结构体访问
+
+```kotlin
+val px = p.x               // 字段访问
+val originX = rect.origin.x  // 链式访问
+```
+
+### 9.4 结构体更新（copy）
+
+`copy` 是编译器为每个结构体类型自动生成的函数，创建复制并替换指定字段的新结构体。
+
+```kotlin
+val p = {x = 10, y = 20}
+val p2 = p.copy(x = 30)        // {x = 30, y = 20}
+val p3 = p.copy(x = 30, y = 40) // {x = 30, y = 40}
+
+// 嵌套更新
+val rect2 = rect.copy(
+    origin = rect.origin.copy(x = 10)
+)
+```
+
+`copy` 执行**浅复制**：基本类型字段按值复制，引用类型字段共享引用。
+
+**集合的赋值语义**：`List`、`Map`、`Set`、`String` 等复合类型在赋值或传参时采用**引用计数共享**——不深拷贝内部结构，仅增加 RC。所有"修改"操作（`append`、`insert`、`remove` 等）返回新集合，原集合不受影响（写时复制在结构层面实现，内部共享不可变子结构）。
+
+### 9.5 结构体模式匹配
+
+```kotlin
+// 解构匹配
+when point {
+    {x = 0, y = 0} -> "origin"
+    {x = 0, y} -> "on y-axis, y = $y"
+    {x, y = 0} -> "on x-axis, x = $x"
+    {x, y} -> "point ($x, $y)"
+}
+
+// 字段提取
+val {name, age} = person
+```
+
+---
+
+## 十、扩展函数与 UFCS
+
+### 10.1 UFCS（统一函数调用语法）
+
+Atomic 中，`a.f(b, c)` 等价于 `f(a, b, c)`。`.` 只是函数调用的另一种语法形式，不暗示任何"方法属于对象"的含义。
+
+```kotlin
+// 以下两种写法完全等价
+List[1, 2, 3].map { it * 2 }
+map(List[1, 2, 3]) { it * 2 }
+
+String.len("hello")
+"hello".len()
+
+// 链式调用是函数组合的语法糖
+List[1, 2, 3, 4, 5]
+    .filter { it % 2 == 0 }
+    .map { it * it }
+    .fold(0) { acc, x -> acc + x }
+```
+
+### 10.2 extension 块
+
+`extension` 块将独立函数按类型归类组织，纯为代码组织工具，编译后函数仍是独立的。
+
+在 `extension` 块内，省略的第一个参数默认名为 `it`。
+
+```kotlin
+enum Shape {
+    Circle(r: Float)
+    Rectangle(w: Float, h: Float)
+    Square(s: Float)
+}
+
+extension Shape {
+    fun area(): Float {
+        return when it {
+            Circle(r) -> 3.14159 * r * r
+            Rectangle(w, h) -> w * h
+            Square(s) -> s * s
+        }
+    }
+
+    fun perimeter(): Float {
+        return when it {
+            Circle(r) -> 2.0 * 3.14159 * r
+            Rectangle(w, h) -> 2.0 * (w + h)
+            Square(s) -> 4.0 * s
+        }
+    }
+
+    fun isRound(): Bool {
+        return when it {
+            Circle(_) -> true
+            else -> false
+        }
+    }
+}
+
+// 链式调用（UFCS 风格）
+val a = Circle(5.0).area()
+// 等价于普通函数调用
+val b = area(Circle(5.0))
+```
+
+### 10.3 extension 与散落函数的等价性
+
+```kotlin
+// 写法 1：extension 块
+extension Shape {
+    fun area(): Float { ... }
+}
+
+// 写法 2：散落扩展函数
+fun area(it: Shape): Float { ... }
+
+// 两者编译结果完全相同
+```
+
+### 10.4 扩展标准库类型
+
+```kotlin
+extension List<Int> {
+    fun sum(): Int {
+        return it.fold(0) { acc, x -> acc + x }
+    }
+
+    fun average(): Float {
+        return it.sum().toFloat() / it.len().toFloat()
+    }
+}
+
+List[1, 2, 3, 4, 5].sum()      // 15
+List[1, 2, 3, 4, 5].average()  // 3.0
+```
+
+---
+
+## 十一、错误处理与空安全
+
+### 11.1 核心类型
+
+```kotlin
+enum Option<T> {
+    Some(T)
+    None
+}
+
+enum Result<T, E> {
+    Ok(T)
+    Err(E)
+}
+```
+
+### 11.2 错误传播操作
+
+| 场景 | 语法 | 说明 |
+|------|------|------|
+| 绑定传播 | `val x? = expr` | 若 expr 是 Err/None，外层**具名函数**提前返回 |
+| 赋值传播 | `x? = expr` | 同上，用于已有 var 变量 |
+| 安全调用 | `expr?.f(args)` | 若 expr 是 Err/None，短路返回；否则调用 f |
+
+**`?` 的作用域限制**：`?` 传播的目标始终是最近的**具名 `fun` 函数体**。在 lambda 或 `launch` 块内使用 `val x? = ...` 是编译错误——lambda 没有具名函数的返回机制。协程作用域内的错误处理应通过 `Result` 值显式传递。
+
+### 11.3 错误传播绑定详述
+
+```kotlin
+// ? 绑定的完整语义
+fun process(): Result<Int, String> {
+    val x? = parseInt("10")    // parseInt 返回 Result<Int, String>
+                                 // 若 Ok(v): x = v, 继续
+                                 // 若 Err(e): process() 立即返回 Err(e)
+
+    val y? = parseInt("20")    // 同上
+    return Ok(x + y)            // 仅当两个解析都成功时到达
+}
+
+fun maybeProcess(): Option<Int> {
+    val x? = findUser(1)       // findUser 返回 Option<User>
+                                 // 若 Some(v): x = v, 继续
+                                 // 若 None: maybeProcess() 立即返回 None
+    return Some(x.age)
+}
+```
+
+**类型兼容矩阵**：
+
+| 表达式类型 | 外层函数返回类型 | 兼容？ |
+|-----------|:-------------:|:----:|
+| `Result<T, E>` | `Result<*, E>` | ✅ |
+| `Option<T>` | `Option<*>` | ✅ |
+| `Option<T>` | `Result<*, E>` （E 可 From\<None\>） | ✅ |
+| `Result<T, E1>` | `Result<*, E2>` （E2 可 From\<E1\>） | ✅ |
+
+### 11.4 安全调用链 `?.`
+
+```kotlin
+// 基本安全调用
+val result = parseInt("123")?.abs()
+// parseInt → Ok(123) → Ok(123.abs()) → Ok(123)
+// parseInt → Err(...) → Err(...)
+
+// 链式安全调用
+val final = parseInt("123")
+    ?.map { it * 2 }
+    ?.toString()
+    ?.orElse("default")
+// 任何一步失败，整个链返回错误
+
+// ?. 与 . 混用
+val result = parseInt("123")    // Result<Int, String>
+    ?.map { it * 2 }             // 仅 Ok 时执行 map
+    .orElse("error")            // 无论成功失败都执行（取出最终值）
+```
+
+**语义**：
+- `a?.f(b, c)` ↔ `when a { Ok(v)/Some(v) -> f(v, b, c); Err(e)/None -> a }`
+- `?.` 是 UFCS 解包：`f` 接收解包后的 `v` 作为**第一个参数**。即 `a?.f(b)` 展开为 `f(v, b)`，而非 `f(b)`。这要求 `f` 的第一个参数类型与 `a` 的解包类型兼容
+- `?.` 仅跳过它前面的调用；后续 `.` 对结果（可能仍是 Result/Option）继续计算
+
+### 11.5 错误处理方法
+
+```kotlin
+// 当场处理
+fun safeParse(s: String): Int {
+    return when parseInt(s) {
+        Ok(v) -> v
+        Err(e) -> {
+            println("error: " + e)
+            0          // 默认值
+        }
+    }
+}
+
+// 使用标准库方法
+val v1 = parseInt("123").unwrapOr(0)           // 成功取值，失败取默认
+val v2 = parseInt("123").orElse { e ->          // 错误时转换
+    println("parse error: $e")
+    0
+}
+val v3 = parseInt("123").unwrap()               // 成功取值，失败则 panic（仅调试用）
+val v4 = parseInt("10").flatMap { x ->          // 链式 Result 操作
+    parseInt("20").map { y -> x + y }
+}
+```
+
+### 11.6 Result/Option 标准库函数
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `map` | `(T -> U, Result<T,E>) -> Result<U,E>` | 对 Ok 值变换 |
+| `map` | `(T -> U, Option<T>) -> Option<U>` | 对 Some 值变换 |
+| `flatMap` | `(T -> Result<U,E>, Result<T,E>) -> Result<U,E>` | 链式 Result 操作 |
+| `flatMap` | `(T -> Option<U>, Option<T>) -> Option<U>` | 链式 Option 操作 |
+| `orElse` | `(E -> U, Result<T,E>) -> U` | 提取值或处理错误 |
+| `orElse` | `(Option<T>, T) -> T` | 提取值或返回默认 |
+| `unwrapOr` | `(Result<T,E>, T) -> T` | 提取值或返回默认值 |
+| `unwrapOr` | `(Option<T>, T) -> T` | 提取值或返回默认值 |
+| `unwrap` | `Result<T,E> -> T` | 提取值，Err 时 panic |
+| `unwrap` | `Option<T> -> T` | 提取值，None 时 panic |
+| `isOk` | `Result<T,E> -> Bool` | 是否为 Ok |
+| `isErr` | `Result<T,E> -> Bool` | 是否为 Err |
+| `isSome` | `Option<T> -> Bool` | 是否为 Some |
+| `isNone` | `Option<T> -> Bool` | 是否为 None |
+| `ok` | `Option<T> -> Result<T, E>` | Option 转 Result（需提供错误值） |
+
+---
+
+## 十二、模块系统
+
+### 12.1 模块定义
+
+每个 `.atom` 文件默认是一个模块。也可以显式使用 `module` 块组织。
+
+```kotlin
+// math.atom
+module math {
+    // 公开导出
+    export fun add(x: Int, y: Int): Int = x + y
+    export fun sub(x: Int, y: Int): Int = x - y
+    export const PI: Float = 3.1415926535
+
+    // 不导出（模块私有）
+    fun helper(): Int = 42
+
+    // export 块（批量声明）
+    export {
+        fun mul(x: Int, y: Int): Int = x * y
+        fun div(x: Int, y: Int): Option<Int> {
+            return when y == 0 { None else Some(x / y) }
+        }
+    }
+
+    // 私有类型
+    type InternalState = {counter: Int, active: Bool}
+}
+
+// 不在 module 块中的顶层声明默认 public
+// main.atom
+fun main() {
+    println("Hello")
+}
+```
+
+### 12.2 导入
+
+```kotlin
+// 模块导入
+import math                       // 使用：math.add(1, 2), math.PI
+
+// 选择性导入
+import math.{add, sub, PI}        // 使用：add(1, 2), PI
+
+// 别名导入
+import math as m                  // 使用：m.add(1, 2), m.PI
+
+// 全部导入（谨慎使用）
+import math.{*}                   // 使用：add(1, 2), PI
+
+// 嵌套模块
+import std.collections.list       // 使用：std.collections.list.map(...)
+import std.collections.{list, map}
+```
+
+### 12.3 可见性规则
+
+| 修饰符 | 可见范围 |
+|--------|----------|
+| `export` | 模块外可见 |
+| （无修饰符） | 模块私有 |
+| `const` | 始终不可变，可 export |
+
+### 12.4 项目结构
+
+```
+my_project/
+├── src/
+│   ├── main.atom              # 入口文件
+│   ├── math.atom              # math 模块
+│   ├── models/
+│   │   ├── user.atom          # models.user 子模块
+│   │   └── product.atom       # models.product 子模块
+│   └── utils.atom
+├── lib/                       # 第三方依赖（自动管理）
+├── tests/
+│   ├── math_test.atom
+│   └── models/
+│       └── user_test.atom
+├── atom.toml                  # 项目配置
+└── README.md
+```
+
+### 12.5 项目配置 `atom.toml`
+
+```toml
+[project]
+name = "my_project"
+version = "0.1.0"
+description = "My Atomic project"
+authors = ["Your Name <email@example.com>"]
+main = "src/main.atom"
+
+[dependencies]
+json = "1.0.0"
+http = "0.2.0"
+
+[dev-dependencies]
+test = "1.0.0"
+
+[build]
+optimize = true
+target = "native"       # native | wasm | vm
+
+[profile.release]
+opt_level = 2
+lto = true
+```
+
+### 12.6 包管理
+
+- 包注册中心：集中式（如 crates.io / npm）
+- 版本格式：语义化版本 `MAJOR.MINOR.PATCH`
+- 锁定文件：`atom.lock` 记录精确版本
+- CLI 命令：
+  - `atom build` — 构建项目
+  - `atom run` — 构建并运行
+  - `atom test` — 运行测试
+  - `atom repl` — 启动交互式环境
+  - `atom add <pkg>` — 添加依赖
+  - `atom remove <pkg>` — 移除依赖
+
+### 12.7 测试
+
+Atomic 内置轻量测试支持。以 `test` 开头的顶层函数自动识别为测试用例：
+
+```kotlin
+// math_test.atom
+import math.{add}
+
+test "add two positive numbers" {
+    assert(add(2, 3) == 5, "2 + 3 should be 5")
+}
+
+test "add with zero" {
+    assert(add(0, 5) == 5, "0 + 5 should be 5")
+    assert(add(5, 0) == 5, "5 + 0 should be 5")
+}
+```
+
+- `test "描述" { ... }` — 定义测试用例
+- `assert(condition, message)` — 断言，失败时 `panic`
+- `atom test` — 运行所有测试，输出通过/失败统计
+
+---
+
+## 十三、标准库
+
+### 13.1 列表函数 `List<T>`
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `List.of` | `(T, ...) -> List<T>` | 从参数构造列表，等价于 `List[...]` |
+| `len` | `List<T> -> Int` | 返回列表长度 |
+| `isEmpty` | `List<T> -> Bool` | 列表是否为空 |
+| `head` | `List<T> -> Option<T>` | 返回首元素 |
+| `last` | `List<T> -> Option<T>` | 返回末元素 |
+| `tail` | `List<T> -> Option<List<T>>` | 除首元素外的列表 |
+| `init` | `List<T> -> Option<List<T>>` | 除末元素外的列表 |
+| `get` | `(List<T>, Int) -> Option<T>` | 安全索引访问 |
+| `map` | `((T) -> U, List<T>) -> List<U>` | 对每个元素应用函数 |
+| `filter` | `((T) -> Bool, List<T>) -> List<T>` | 保留满足条件的元素 |
+| `fold` | `((A, T) -> A, A, List<T>) -> A` | 左折叠 |
+| `foldRight` | `((T, A) -> A, A, List<T>) -> A` | 右折叠 |
+| `reduce` | `((T, T) -> T, List<T>) -> Option<T>` | 用二元函数归约 |
+| `any` | `((T) -> Bool, List<T>) -> Bool` | 任一元素满足？ |
+| `all` | `((T) -> Bool, List<T>) -> Bool` | 全部元素满足？ |
+| `find` | `((T) -> Bool, List<T>) -> Option<T>` | 查找满足条件的元素 |
+| `indexOf` | `(T, List<T>) -> Option<Int>` | 元素首次出现的索引 |
+| `take` | `(Int, List<T>) -> List<T>` | 取前 n 个元素 |
+| `drop` | `(Int, List<T>) -> List<T>` | 丢弃前 n 个元素 |
+| `takeWhile` | `((T) -> Bool, List<T>) -> List<T>` | 取满足条件的前缀 |
+| `dropWhile` | `((T) -> Bool, List<T>) -> List<T>` | 丢弃满足条件的前缀 |
+| `reverse` | `List<T> -> List<T>` | 反转列表 |
+| `sorted` | `List<T> -> List<T>` | 排序（需 T 可比较） |
+| `sortedBy` | `((T, T) -> Ordering, List<T>) -> List<T>` | 按比较器排序 |
+| `zip` | `(List<A>, List<B>) -> List<(A, B)>` | 按位置配对 |
+| `withIndex` | `List<T> -> List<(Int, T)>` | 带索引遍历 |
+| `contains` | `(T, List<T>) -> Bool` | 是否包含元素 |
+| `append` | `(List<T>, T) -> List<T>` | 末尾追加（返回新列表） |
+| `prepend` | `(T, List<T>) -> List<T>` | 头部插入（返回新列表） |
+| `concat` | `(List<T>, List<T>) -> List<T>` | 连接两个列表 |
+| `flatten` | `List<List<T>> -> List<T>` | 展平嵌套列表 |
+| `flatMap` | `((T) -> List<U>, List<T>) -> List<U>` | map + flatten |
+| `unique` | `List<T> -> List<T>` | 去重 |
+| `slice` | `(List<T>, Int, Int) -> List<T>` | 切片 [start, end) |
+| `splitAt` | `(Int, List<T>) -> (List<T>, List<T>)` | 在索引处分割 |
+| `chunks` | `(Int, List<T>) -> List<List<T>>` | 等分块 |
+| `windows` | `(Int, List<T>) -> List<List<T>>` | 滑动窗口 |
+| `range` | `(Int, Int) -> List<Int>` | 生成 [start, end) 整数列表 |
+| `repeat` | `(T, Int) -> List<T>` | 生成 n 个相同元素的列表 |
+
+### 13.2 字符串函数 `String`
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `len` | `String -> Int` | 字符数（非字节数） |
+| `isEmpty` | `String -> Bool` | 是否为空 |
+| `toUpper` | `String -> String` | 转大写 |
+| `toLower` | `String -> String` | 转小写 |
+| `trim` | `String -> String` | 去除两端空白 |
+| `trimStart` | `String -> String` | 去除左端空白 |
+| `trimEnd` | `String -> String` | 去除右端空白 |
+| `split` | `(String, String) -> List<String>` | 按分隔符分割 |
+| `splitLines` | `String -> List<String>` | 按行分割 |
+| `join` | `(String, List<String>) -> String` | 用分隔符拼接列表 |
+| `contains` | `(String, String) -> Bool` | 是否包含子串 |
+| `startsWith` | `(String, String) -> Bool` | 是否以某串开头 |
+| `endsWith` | `(String, String) -> Bool` | 是否以某串结尾 |
+| `indexOf` | `(String, String) -> Option<Int>` | 子串首次出现位置 |
+| `replace` | `(String, String, String) -> String` | 替换子串 |
+| `slice` | `(String, Int, Int) -> String` | 字符切片 |
+| `chars` | `String -> List<Char>` | 转为字符列表 |
+| `toInt` | `String -> Option<Int>` | 尝试解析为 Int |
+| `toFloat` | `String -> Option<Float>` | 尝试解析为 Float |
+| `repeat` | `(String, Int) -> String` | 重复 n 次 |
+
+### 13.3 映射函数 `Map<K,V>`
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `Map.of` | `((K, V), ...) -> Map<K,V>` | 从键值对构造映射，等价于 `Map[...]` |
+| `len` | `Map<K,V> -> Int` | 键值对数量 |
+| `isEmpty` | `Map<K,V> -> Bool` | 是否为空 |
+| `get` | `(Map<K,V>, K) -> Option<V>` | 按键取值 |
+| `insert` | `(Map<K,V>, K, V) -> Map<K,V>` | 插入/更新（返回新 Map） |
+| `remove` | `(Map<K,V>, K) -> Map<K,V>` | 删除键（返回新 Map） |
+| `containsKey` | `(Map<K,V>, K) -> Bool` | 是否包含键 |
+| `keys` | `Map<K,V> -> List<K>` | 所有键 |
+| `values` | `Map<K,V> -> List<V>` | 所有值 |
+| `entries` | `Map<K,V> -> List<(K,V)>` | 所有键值对 |
+| `mapValues` | `((V) -> W, Map<K,V>) -> Map<K,W>` | 变换值 |
+| `filter` | `(((K,V)) -> Bool, Map<K,V>) -> Map<K,V>` | 过滤键值对 |
+| `fold` | `((A, K, V) -> A, A, Map<K,V>) -> A` | 折叠 |
+| `union` | `(Map<K,V>, Map<K,V>) -> Map<K,V>` | 合并（后者覆盖前者） |
+
+### 13.4 集合函数 `Set<T>`
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `Set.of` | `(T, ...) -> Set<T>` | 从参数构造集合，等价于 `Set[...]` |
+| `len` | `Set<T> -> Int` | 元素数量 |
+| `isEmpty` | `Set<T> -> Bool` | 是否为空 |
+| `contains` | `(Set<T>, T) -> Bool` | 是否包含元素 |
+| `insert` | `(Set<T>, T) -> Set<T>` | 插入（返回新 Set） |
+| `remove` | `(Set<T>, T) -> Set<T>` | 删除（返回新 Set） |
+| `union` | `(Set<T>, Set<T>) -> Set<T>` | 并集 |
+| `intersection` | `(Set<T>, Set<T>) -> Set<T>` | 交集 |
+| `difference` | `(Set<T>, Set<T>) -> Set<T>` | 差集 |
+| `isSubset` | `(Set<T>, Set<T>) -> Bool` | 是否为子集 |
+| `toList` | `Set<T> -> List<T>` | 转为列表 |
+| `fromList` | `List<T> -> Set<T>` | 从列表创建 |
+
+### 13.5 类型转换函数
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `toInt` | `(value) -> Option<Int>` | 转为 Int |
+| `toFloat` | `(value) -> Option<Float>` | 转为 Float |
+| `toString` | `(value) -> String` | 转为 String（对所有类型可用） |
+| `toChar` | `(Int) -> Option<Char>` | 整数转字符 |
+| `charCode` | `Char -> Int` | 字符转整数（Unicode 码点） |
+
+### 13.6 输入输出
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `print` | `(value) -> Unit` | 输出到 stdout（不换行） |
+| `println` | `(value) -> Unit` | 输出到 stdout（换行） |
+| `readLine` | `() -> Option<String>` | 读取 stdin 一行（EOF 返回 None） |
+| `readFile` | `(String) -> Result<String, IoError>` | 读取文件内容 |
+| `writeFile` | `(String, String) -> Result<Unit, IoError>` | 写入文件 |
+| `appendFile` | `(String, String) -> Result<Unit, IoError>` | 追加到文件 |
+| `exists` | `(String) -> Bool` | 文件/目录是否存在 |
+| `deleteFile` | `(String) -> Result<Unit, IoError>` | 删除文件 |
+| `readDir` | `(String) -> Result<List<String>, IoError>` | 列出目录内容 |
+
+### 13.7 数学函数
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `abs` | `(Int) -> Int` | 绝对值（整数） |
+| `absF` | `(Float) -> Float` | 绝对值（浮点） |
+| `min` | `(T, T) -> T` | 较小值 |
+| `max` | `(T, T) -> T` | 较大值 |
+| `clamp` | `(T, T, T) -> T` | 限制在范围内 |
+| `pow` | `(Float, Float) -> Float` | 幂运算 |
+| `sqrt` | `(Float) -> Float` | 平方根 |
+| `cbrt` | `(Float) -> Float` | 立方根 |
+| `sin` / `cos` / `tan` | `(Float) -> Float` | 三角函数 |
+| `asin` / `acos` / `atan` | `(Float) -> Float` | 反三角函数 |
+| `atan2` | `(Float, Float) -> Float` | 双参数反三角 |
+| `log` / `log2` / `log10` | `(Float) -> Float` | 对数 |
+| `exp` | `(Float) -> Float` | e 的幂 |
+| `floor` / `ceil` / `round` | `(Float) -> Float` | 取整 |
+| `pi` | `Float` | 圆周率 π |
+| `e` | `Float` | 自然常数 e |
+| `isNaN` | `(Float) -> Bool` | 是否为 NaN |
+| `isInfinite` | `(Float) -> Bool` | 是否为无穷 |
+
+### 13.8 协程函数
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `launch` | `(( ) -> T) -> Task<T>` | 启动协程，返回任务句柄。T 由花括号最后一行推断 |
+| `coroutineScope` | `(block) -> List<T>` | 创建结构化并发作用域，自动等待并收集结果 |
+| `delay` | `(Int) -> Unit` | 挂起当前协程指定毫秒，不阻塞线程 |
+| `withTimeout` | `(Int, ( ) -> T) -> Result<T, TimeoutError>` | 超时控制，超时返回 `Err(TimeoutError)` |
+
+`Stream<T>` 上的操作：
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `stream` | `<T>() -> Stream<T>` | 创建协程间通讯流 |
+| `send` | `(Stream<T>, T) -> Unit` | 发送值到流（可挂起） |
+| `receive` | `Stream<T> -> T` | 从流接收值（可挂起） |
+| `close` | `Stream<T> -> Unit` | 关闭流，通知消费者结束 |
+
+`Task<T>` 上的操作：
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `cancel` | `Task<T> -> Unit` | 取消协程 |
+| `isDone` | `Task<T> -> Bool` | 检查协程是否已完成 |
+| `isCancelled` | `Task<T> -> Bool` | 检查协程是否已取消 |
+| `wait` | `Task<T> -> T` | 阻塞等待并返回结果 |
+
+### 13.9 惰性列表 `LazyList<T>`
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `lazyList` | `(T, (T) -> T) -> LazyList<T>` | 从种子和递推函数构造惰性列表 |
+| `toLazyList` | `List<T> -> LazyList<T>` | 将列表转为惰性列表 |
+| `toList` | `LazyList<T> -> List<T>` | 强制求值，转为普通列表 |
+| `take` | `(Int, LazyList<T>) -> LazyList<T>` | 取前 n 个元素（惰性） |
+| `drop` | `(Int, LazyList<T>) -> LazyList<T>` | 跳过前 n 个元素（惰性） |
+| `takeWhile` | `((T) -> Bool, LazyList<T>) -> LazyList<T>` | 取满足条件的前缀（惰性） |
+| `map` | `((T) -> U, LazyList<T>) -> LazyList<U>` | 变换每个元素（惰性） |
+| `filter` | `((T) -> Bool, LazyList<T>) -> LazyList<T>` | 过滤元素（惰性） |
+| `head` | `LazyList<T> -> Option<T>` | 取第一个元素（触发求值） |
+| `zip` | `(LazyList<A>, LazyList<B>) -> LazyList<(A, B)>` | 配对两个惰性列表（惰性） |
+
+### 13.10 日期时间
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `now` | `() -> DateTime` | 当前日期时间（本地时区） |
+| `nowUtc` | `() -> DateTime` | 当前日期时间（UTC） |
+| `today` | `() -> Date` | 当前日期 |
+| `date` | `(Int, Int, Int) -> Option<Date>` | 构造日期（年, 月, 日） |
+| `datetime` | `(Int, Int, Int, Int, Int, Int) -> Option<DateTime>` | 构造日期时间 |
+| `addDays` | `(Date, Int) -> Date` | 加天数 |
+| `addHours` | `(DateTime, Int) -> DateTime` | 加小时 |
+| `diffDays` | `(Date, Date) -> Int` | 两个日期的天数差 |
+| `diffSeconds` | `(DateTime, DateTime) -> Int` | 两个日期时间的秒数差 |
+| `format` | `(DateTime, String) -> String` | 格式化日期时间 |
+| `parseDate` | `(String, String) -> Option<Date>` | 解析日期字符串 |
+| `year` / `month` / `day` | `(Date) -> Int` | 提取日期分量 |
+| `hour` / `minute` / `second` | `(DateTime) -> Int` | 提取时间分量 |
+| `weekday` | `(Date) -> Int` | 星期几（1=周一，7=周日） |
+
+### 13.11 随机数
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `randInt` | `(Int, Int) -> Int` | 生成 [min, max] 范围内的随机整数 |
+| `randFloat` | `() -> Float` | 生成 [0.0, 1.0) 范围内的随机浮点数 |
+| `randChoice` | `(List<T>) -> Option<T>` | 从列表中随机选取一个元素 |
+| `randShuffle` | `(List<T>) -> List<T>` | 随机打乱列表顺序 |
+| `Random.new` | `(Int) -> Random` | 用种子创建随机数生成器 |
+| `Random.nextInt` | `(Random, Int, Int) -> (Random, Int)` | 生成下一个随机整数 |
+
+```kotlin
+// 使用全局随机数生成器
+val dice = randInt(1, 6)
+val coin = when randFloat() < 0.5 { "正面" else "反面" }
+
+// 使用种子创建可复现的随机序列
+val rng = Random.new(42)
+val (rng2, a) = rng.nextInt(1, 100)
+val (_, b) = rng2.nextInt(1, 100)
+// a 和 b 由种子 42 确定的序列生成，可复现
+```
+
+### 13.12 杂项
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `panic` | `(String) -> !` | 使程序崩溃（永不返回） |
+| `assert` | `(Bool, String) -> Unit` | 调试断言 |
+| `identity` | `<T>(T) -> T` | 恒等函数 |
+| `const` | `<A,B>(A, B) -> A` | 返回第一个参数的常函数 |
+| `compose` | `((B) -> C, (A) -> B, A) -> C` | 函数复合 |
+| `flip` | `((A, B) -> C, B, A) -> C` | 翻转参数 |
+| `curry` | `((A, B) -> C, A) -> (B) -> C` | 柯里化 |
+| `uncurry` | `((A) -> (B) -> C, A, B) -> C` | 反柯里化 |
+
+---
+
+## 十四、内存管理
+
+### 14.1 策略
+
+| 项目 | 选择 |
+|------|------|
+| 策略 | 引用计数（RC）+ 循环检测器 |
+| 分代 | 否（轻量级，不分代） |
+| 触发 | RC 降零即时释放 + 定期循环检测 |
+| 目标场景 | 短生命周期对象为主 |
+
+### 14.2 引用计数
+
+- 每个堆分配对象携带一个引用计数字段
+- 赋值、传参、闭包捕获时 RC + 1
+- 离开作用域、覆盖变量时 RC - 1
+- RC = 0 时立即释放内存
+
+### 14.3 循环检测
+
+循环引用（如双向链表、带父引用的树）会导致 RC 永不降零。循环检测器定期扫描以发现并回收不可达的循环。
+
+- 周期：GC 分配量达到阈值时触发
+- 算法：标记-清除（只针对候选循环节点）
+
+### 14.4 栈与堆
+
+- 基本类型（Int, Float, Bool, Char）：优先栈分配
+- 复合类型（List, Map, Set, String, 结构体）：堆分配 + RC
+- 闭包捕获变量：堆分配 + RC
+- 枚举（含参数）：堆分配 + RC
+
+### 14.5 内存安全
+
+- 无悬垂指针：RC 保证
+- 无 use-after-free：RC 保证
+- 无双重释放：RC 保证
+- 无空指针解引用：类型系统保证（Option\<T\> 需解包）
+- 无缓冲区溢出：编译器插入边界检查
+
+---
+
+## 十五、外部函数接口（FFI）
+
+### 15.1 C FFI
+
+Atomic 提供与 C ABI 的互操作能力。
+
+```kotlin
+// 声明外部 C 函数
+external fun puts(s: CString): Int
+
+// 声明外部 C 结构体
+external type FILE
+
+external fun fopen(path: CString, mode: CString): Ptr<FILE>
+external fun fclose(file: Ptr<FILE>): Int
+external fun fprintf(file: Ptr<FILE>, fmt: CString, ...): Int
+
+// 使用
+fun writeMessage(path: String, msg: String): Result<Int, String> {
+    val file? = fopen(path.toCString(), "w".toCString())
+    val result = fprintf(file, "%s\n".toCString(), msg.toCString())
+    fclose(file)
+    return Ok(result)
+}
+```
+
+### 15.2 FFI 类型映射
+
+| C 类型 | Atomic 类型 |
+|--------|-------------|
+| `int` / `long` | `Int` |
+| `float` / `double` | `Float` |
+| `char` | `Char` |
+| `const char*` | `CString`（以 null 结尾） |
+| `void*` | `Ptr<T>`（类型化指针） |
+| `struct*` | `Ptr<T>` |
+| `void` | `Unit`（返回值为 Unit 类型） |
+
+### 15.3 FFI 安全性
+
+- `external` 函数调用在 `unsafe { }` 块中进行
+- `CString` 和 `Ptr<T>` 仅在 `unsafe` 块中可操作
+- 内存管理边界：Atomic 分配的内存由 RC 管理；C 分配的内存需手动释放
+
+```kotlin
+fun safeFopen(path: String, mode: String): Result<Ptr<FILE>, String> {
+    return unsafe {
+        val file = fopen(path.toCString(), mode.toCString())
+        when file.isNull() { Err("failed to open file") else Ok(file) }
+    }
+}
+```
+
+---
+
+## 十六、并发与协程
+
+### 16.1 设计理念
+
+Atomic 的协程设计遵循七个核心原则：
+
+- **所有函数都是协程函数**：不需要 `suspend` 关键字。任何函数都可以被 `launch` 启动，运行时自动处理挂起与恢复。
+- **结构化并发**：协程的生命周期由作用域管理。`coroutineScope` 自动等待所有子协程完成，杜绝协程泄漏。
+- **无 `await`**：`coroutineScope` 自动收拢作用域内所有 `launch` 的结果，按调用顺序收集，不需要逐个等待。协程间依赖通过 `Stream` 通讯解决。
+- **显式返回**：需要结果的协程用 `launch` 启动并返回 `Task<T>`，类型由推断自动处理；不需要结果的直接 `launch`。
+- **快速失败**：作用域内任意协程失败，立即取消其余协程，错误向外传播。
+- **正交复用**：错误处理完全复用 `Result<T, E>` 和 `?` 传播语法，协程不引入新的错误机制。
+- **流式通讯**：协程间通过 `Stream<T>` 进行异步数据交换，消费端复用 `for ... in` 语法。
+
+与 Kotlin/Rust/Swift 等语言的关键区别：
+
+| 概念 | Kotlin | Rust | Swift | Atomic |
+|------|--------|------|-------|--------|
+| 挂起标记 | `suspend` | `async fn` | `async` | **无**（所有函数默认可挂起） |
+| 等待结果 | `await` / `join` | `.await` | `await` | **无**（`coroutineScope` 自动收拢） |
+| 启动协程 | `launch` / `async` | `tokio::spawn` | `Task { }` | `launch { }` |
+| 结果类型 | `Job` / `Deferred<T>` | `JoinHandle<T>` | `Task<T>` | `Task<T>` |
+| 协程间通讯 | `Channel<T>` | `mpsc::channel` | `AsyncStream` | `Stream<T>` + `for ... in` |
+| 作用域 | `coroutineScope` | `join!` / `try_join!` | `withTaskGroup` | `coroutineScope { }` |
+
+### 16.2 启动协程（launch）
+
+`launch` 是启动协程的唯一方式。协程在后台并发执行，`launch` 调用本身不阻塞。
+
+```kotlin
+// 不需要返回值——花括号最后一行无表达式或为 Unit
+launch {
+    for i in 1..10 {
+        println(i)
+        delay(1000)
+    }
+}
+
+// 需要返回值——花括号最后一行是表达式，自动推断为 Task<T>
+val task = launch {
+    fetchUser(123)
+}
+// task 类型为 Task<User>
+
+// 多个协程同时启动
+val task1 = launch { fetchUser(1) }
+val task2 = launch { fetchUser(2) }
+val task3 = launch { fetchUser(3) }
+```
+
+**类型推断规则**：与 `for` 表达式一致——花括号内最后一行的类型决定 `Task<T>` 的 `T`。如果最后一行无表达式（副作用），返回 `Unit`。
+
+**`Task<T>` 类型**：
+
+`Task<T>` 是协程的句柄，代表一个尚未完成（或已完成）的并发计算。
+
+```kotlin
+// Task<T> 上的操作
+val cancelled = task.isCancelled()   // Bool：是否已取消
+val done = task.isDone()             // Bool：是否已完成
+task.cancel()                         // 取消协程
+val result = task.wait()              // 阻塞等待结果，返回 T
+```
+
+通常不需要直接操作 `Task<T>`——使用 `coroutineScope` 自动管理生命周期和结果收集。
+
+### 16.3 并发作用域（coroutineScope）
+
+`coroutineScope` 创建一个结构化并发作用域，提供以下保证：
+
+1. **等待完成**：作用域内所有 `launch` 启动的协程全部完成后，作用域才退出
+2. **顺序收集**：按 `launch` 的**调用顺序**（源码书写顺序）收集结果为列表，而非协程的实际完成顺序
+3. **生命周期管理**：离开作用域后，所有子协程自动结束，无泄漏
+4. **快速失败**：任意一个 `launch` 返回 `Err`，立即取消其余正在执行的协程，作用域返回该错误
+
+#### 同质结果——返回列表
+
+当作用域内所有 `launch` 返回相同类型时，结果自动收集为 `List<T>`：
+
+```kotlin
+// 所有 launch 返回 User → List<User>
+val users: List<User> = coroutineScope {
+    launch { fetchUser(1) }    // Task<User>
+    launch { fetchUser(2) }    // Task<User>
+    launch { fetchUser(3) }    // Task<User>
+}
+// users = [User(1), User(2), User(3)]
+// 总耗时 ≈ max(T1, T2, T3)
+```
+
+#### 异质结果——元组解构（编译时类型安全）
+
+当 `launch` 返回不同类型时，使用元组解构 `val (...)` 绑定。编译器按 `launch` 调用顺序合成元组类型，**编译时类型安全，无需运行时转型**：
+
+```kotlin
+// 编译器自动合成元组类型 (User, List<Post>, List<User>)
+val (user, posts, friends) = coroutineScope {
+    launch { fetchUser(id) }       // Task<User>
+    launch { fetchPosts(id) }      // Task<List<Post>>
+    launch { fetchFriends(id) }    // Task<List<User>>
+}
+// user: User, posts: List<Post>, friends: List<User>
+// 编译时检查，无运行时转型风险
+```
+
+**类型推断规则**：
+
+| 绑定形式 | 编译器行为 | 结果类型 |
+|----------|-----------|:--:|
+| `val x = coroutineScope { ... }` | 所有 launch 必须同质 | `List<T>` |
+| `val (a, b) = coroutineScope { ... }` | 按位置合成元组 | `(T1, T2)`，各元素独立类型 |
+| `val (a, b, c) = coroutineScope { ... }` | 按位置合成三元组 | `(T1, T2, T3)` |
+
+元组解构时，编译器在编译时检查：
+- 解构变量数量 = `launch` 数量
+- 每个变量的类型 = 对应位置 `launch` 的返回类型
+- 若数量不匹配或类型不兼容 → **编译错误**（而非运行时 panic）
+
+作用域内可混合同步代码和 `launch`，同步代码不影响结果收集：
+
+```kotlin
+val (user, posts) = coroutineScope {
+    val config = fetchConfig()             // 同步，不参与结果收集
+    launch { fetchUser(1, config) }        // 位置 0 → user
+    launch { fetchPosts(1, config) }       // 位置 1 → posts
+}
+```
+
+#### 循环内的 launch——返回列表
+
+在 `for` 循环或条件分支内 `launch` 时，编译器无法在编译时确定数量，此时返回 `List<T>`，所有 launch 必须返回相同类型：
+
+```kotlin
+// 循环内 launch → 返回 List<User>（编译时无法确定数量）
+val users: List<User> = coroutineScope {
+    for id in List[1, 2, 3, 4, 5] {
+        launch { fetchUser(id) }
+    }
+}
+```
+
+### 16.4 并发 vs 顺序
+
+```kotlin
+// 顺序执行——总耗时 = 所有请求耗时之和
+fun loadSequential(): List<User> {
+    return List[
+        fetchUser(1),    // 等待 T1
+        fetchUser(2),    // 等待 T2
+        fetchUser(3),    // 等待 T3
+    ]
+}
+// 总耗时 = T1 + T2 + T3
+
+// 并发执行——总耗时 ≈ 最慢的那个请求的耗时
+fun loadConcurrent(): List<User> {
+    return coroutineScope {
+        launch { fetchUser(1) }
+        launch { fetchUser(2) }
+        launch { fetchUser(3) }
+    }
+}
+// 总耗时 ≈ max(T1, T2, T3)
+```
+
+**何时用并发 vs 顺序**：
+
+| 场景 | 推荐 | 原因 |
+|------|------|------|
+| 独立 I/O 操作（多个 API 调用） | `coroutineScope` 并发 | 等待时间可叠加缩短 |
+| 有依赖的计算（后一步依赖前一步结果） | 顺序调用 | 无法并发 |
+| CPU 密集型计算（无 I/O 等待） | 顺序调用 | 单线程无加速 |
+| 混合场景 | 先顺序计算依赖，再并发 I/O | 最大化并行度 |
+
+### 16.5 解构 vs 列表的选择
+
+**使用元组解构**——当 `launch` 数量和类型在编译时确定，且类型各不相同时：
+
+```kotlin
+type Profile = {user: User, posts: List<Post>, friends: List<User>}
+
+fun loadProfile(id: Int): Profile {
+    val (user, posts, friends) = coroutineScope {
+        launch { fetchUser(id) }
+        launch { fetchPosts(id) }
+        launch { fetchFriends(id) }
+    }
+    return {user, posts, friends}
+}
+// 编译时类型安全：user: User, posts: List<Post>, friends: List<User>
+```
+
+**使用列表**——当所有 `launch` 返回相同类型，或在循环中启动时：
+
+```kotlin
+// 同质类型 → 列表
+val users: List<User> = coroutineScope {
+    launch { fetchUser(1) }
+    launch { fetchUser(2) }
+    launch { fetchUser(3) }
+}
+
+// 循环中启动 → 列表
+val users2: List<User> = coroutineScope {
+    for id in ids {
+        launch { fetchUser(id) }
+    }
+}
+```
+
+**设计原则**：编译器根据绑定形式自动选择——`val (...)` 触发元组合成（编译时类型安全），`val x =` 触发列表收集（要求同质类型）。不存在运行时 `as` 转型。
+
+### 16.6 错误处理
+
+协程作用域的错误处理完全复用 `Result<T, E>` 和 `?` 传播语法，不引入任何新机制。
+
+**规则**：
+
+| 规则 | 说明 |
+|------|------|
+| 快速失败 | 任意 `launch` 返回 `Err` → 立即取消其余所有正在执行的协程 |
+| 错误传播 | 作用域返回第一个遇到的 `Err` |
+| `?` 语法可用 | `val x? = launch { ... }` 在作用域内正常工作，遇到 `Err` 提前退出 |
+| 全部成功 | 所有 `launch` 成功 → 按调用顺序收集 `Ok` 内的值 |
+
+**示例**：
+
+```kotlin
+enum AppError {
+    NetworkError
+    Timeout
+    NotFound
+}
+
+fun safeFetchUser(id: Int): Result<User, AppError> { ... }
+fun safeFetchPosts(userId: Int): Result<List<Post>, AppError> { ... }
+
+// 使用 ? 传播提取值
+fun renderHomePage(userId: Int): Result<Html, AppError> {
+    return coroutineScope {
+        val user? = launch { safeFetchUser(userId) }
+        val posts? = launch { safeFetchPosts(userId) }
+        // 到达此处意味着 user 和 posts 都已成功
+        Ok(render(user, posts))
+    }
+}
+// 任意请求失败 → 立即取消其他 → 返回 Err(第一个错误)
+```
+
+### 16.7 协程间通讯：Stream\<T\>
+
+`Stream<T>` 是协程间流式通讯通道，允许一个协程生产数据、另一个协程消费数据。消费端复用 `for ... in` 语法，与遍历列表一致。
+
+#### 创建与基本用法
+
+```kotlin
+// 创建 Stream
+val stream = stream<Int>()
+
+coroutineScope {
+    // 生产者协程
+    launch {
+        for i in 1..5 {
+            stream.send(i)
+            delay(100)
+        }
+        stream.close()  // 关闭流，通知消费者结束
+    }
+
+    // 消费者协程
+    launch {
+        for value in stream {
+            println(value)  // 1, 2, 3, 4, 5（每次接收一个）
+        }
+        // 流关闭后，循环自动结束
+    }
+}
+```
+
+#### Stream API
+
+| 方法 | 说明 |
+|------|------|
+| `stream.send(value)` | 发送一个值到流（若消费者未就绪则挂起） |
+| `stream.receive()` | 从流接收一个值（若无数据则挂起） |
+| `stream.close()` | 关闭流，通知消费者数据结束 |
+| `for item in stream { ... }` | 遍历流，每次接收一个值，流关闭后循环自动退出 |
+
+**语义保证**：
+
+- **有序**：发送顺序 = 接收顺序（FIFO）
+- **单消费者**：每个 `Stream<T>` 只能被一个消费者遍历
+- **背压**：若消费者慢于生产者，`send` 自动挂起，不会无限制堆积
+- **关闭语义**：`close()` 后消费者可继续消费已缓冲的数据，消费完毕后循环退出
+
+### 16.8 管道模式（Pipeline）
+
+多个 `Stream` 串联可构建数据处理管道，每个协程负责一个处理阶段：
+
+```kotlin
+// 数据流水线——读取 → 解析 → 输出
+coroutineScope {
+    val raw = stream<String>()
+    val parsed = stream<Int>()
+
+    // Stage 1：读取
+    launch {
+        for line in readLines("data.txt") {
+            raw.send(line)
+        }
+        raw.close()
+    }
+
+    // Stage 2：解析
+    launch {
+        for line in raw {
+            val num? = parseInt(line)
+            parsed.send(num)
+        }
+        parsed.close()
+    }
+
+    // Stage 3：输出
+    launch {
+        for num in parsed {
+            println(num)
+        }
+    }
+}
+```
+
+```kotlin
+// 实时数据处理——传感器 → 滤波 → 告警
+fun monitorSensors() {
+    coroutineScope {
+        val raw = stream<Int>()
+        val filtered = stream<Int>()
+
+        // 采集
+        launch {
+            for {
+                raw.send(readSensor())
+                delay(100)
+            }
+        }
+
+        // 滤波
+        launch {
+            for value in raw {
+                when value > threshold { filtered.send(value) else {} }
+            }
+            filtered.close()
+        }
+
+        // 告警
+        launch {
+            for value in filtered {
+                alert("异常值: $value")
+            }
+        }
+    }
+}
+```
+
+### 16.9 嵌套作用域
+
+作用域可以嵌套，每层独立管理其子协程的生命周期。
+
+```kotlin
+// 外层：多个用户并发；内层：每个用户的子资源并发
+fun loadAllProfiles(ids: List<Int>): List<Profile> {
+    return coroutineScope {
+        for id in ids {
+            launch {
+                // 内层作用域：user/posts/friends 并发
+                coroutineScope {
+                    launch { fetchUser(id) }
+                    launch { fetchPosts(id) }
+                    launch { fetchFriends(id) }
+                }
+            }
+        }
+    }
+}
+// 内层作用域完成 → 外层才能收集该结果
+// 错误隔离：某个 id 的内层失败只影响该协程，外层可通过 Result 捕获
+```
+
+### 16.10 循环内启动协程
+
+循环内 `launch` 返回 `List<T>`，结果按**调用顺序**收集。支持 `continue` 跳过元素，与 `for` 表达式语义一致。
+
+**与普通 `for` 表达式的关键区别**：`coroutineScope` 内的 `for` + `launch` 是**并发执行**——各迭代体作为独立协程并发运行，总耗时取决于最慢的协程。而普通 `for` 表达式（§7.2）是**同步顺序执行**——各迭代在当前线程依次运行。两者语法相似，执行模型完全不同。
+
+```kotlin
+// 并发加载多个用户
+val users: List<User> = coroutineScope {
+    for id in List[1, 2, 3, 4, 5] {
+        launch { fetchUser(id) }
+    }
+}
+// users = [User(1), User(2), User(3), User(4), User(5)]
+
+// 带过滤的并发
+val activeUsers: List<User> = coroutineScope {
+    for id in userIds {
+        launch {
+            val user = fetchUser(id)
+            when user.isActive { user else continue }
+        }
+    }
+}
+// continue 跳过该元素，不在结果列表中
+```
+
+循环内的 `launch` 无法使用元组解构（因为数量在编译时未知），所有 `launch` 必须返回相同类型。
+
+### 16.11 协程工具函数
+
+#### delay
+
+挂起当前协程指定毫秒，不阻塞线程。
+
+```kotlin
+delay(1000)  // 挂起 1 秒
+```
+
+#### withTimeout
+
+为代码块设置超时。超时后取消内部所有协程，返回 `Err(TimeoutError)`。
+
+```kotlin
+// 为整个作用域设置超时
+val result = withTimeout(5000) {
+    coroutineScope {
+        launch { fetchUser(1) }
+        launch { fetchUser(2) }
+        launch { fetchUser(3) }
+    }
+}
+// 5 秒内未全部完成 → 取消所有协程 → 返回 Err(TimeoutError)
+```
+
+### 16.12 协程的生命周期保证
+
+| 保证 | 机制 |
+|------|------|
+| 无泄漏 | `coroutineScope` 离开作用域时确保所有子协程已结束 |
+| 无孤儿协程 | 所有 `launch` 必须在 `coroutineScope` 内或顶层作用域中 |
+| 快速失败 | 任意协程失败 → 取消兄弟协程 |
+| 顺序确定性 | 结果按 `launch` 调用顺序收集，与执行时序无关 |
+| 流安全 | `Stream` 保证 FIFO 有序、单消费者、背压、关闭语义 |
+
+### 16.13 调度器
+
+Atomic 运行时默认使用**单线程事件循环 + I/O 多路复用**，类似 Node.js 的事件循环模型：
+
+- 主线程运行事件循环，处理所有协程
+- I/O 操作（文件、网络）由操作系统异步 I/O（epoll/kqueue/IOCP）驱动
+- 所有协程在同一个线程中交替执行（协作式多任务），无数据竞争
+
+#### 调度器选择
+
+`launch` 可接受可选的调度器参数，指定协程的执行环境：
+
+```kotlin
+// 默认调度——主事件循环（协作式多任务）
+launch { fetchUser(1) }
+
+// I/O 调度器——适合 I/O 密集型协程，事件循环优先调度
+launch(.io) { fetchUser(1) }
+launch(.io) { fetchUser(2) }
+```
+
+`.cpu` 调度器用于 CPU 密集型计算，通过 `.on(.cpu)` 将表达式卸载到后台线程池执行：
+
+```kotlin
+// 将 CPU 密集计算卸载到线程池
+val result = heavyComputation(data).on(.cpu)
+// 主事件循环继续处理其他协程，不被阻塞
+
+// 在协程中使用
+launch {
+    val data = fetchUser(id)           // I/O，事件循环
+    val processed = data.on(.cpu) {    // CPU 密集，后台线程
+        heavyCompute(data)
+    }
+    save(processed)                    // I/O，事件循环
+}
+```
+
+**调度器类型**：
+
+| 调度器 | 运行位置 | 适用场景 |
+|--------|----------|----------|
+| 默认（无参数） | 主事件循环 | 通用协程 |
+| `.io` | 主事件循环（高优先级） | I/O 密集型协程 |
+| `.cpu`（通过 `.on`） | 后台线程池 | CPU 密集型计算 |
+
+### 16.14 语法总结
+
+| 语法 | 用途 | 返回类型 |
+|------|------|:--:|
+| `launch { ... }` | 启动协程，副作用 | `Unit` |
+| `val t = launch { ... }` | 启动协程，需要返回值 | `Task<T>`（类型推断） |
+| `launch(.io) { ... }` | 在 I/O 调度器上启动协程 | `Unit` |
+| `expr.on(.cpu) { ... }` | 将代码块卸载到后台线程执行 | 代码块返回类型 |
+| `coroutineScope { ... }` | 创建并发作用域，自动收拢结果 | `List<T>`（同质）或元组 `(T1,T2,...)`（解构） |
+| `val (a,b) = coroutineScope { ... }` | 元组解构，编译时类型安全 | `(T1, T2)` 各元素独立类型 |
+| `stream<T>()` | 创建协程间通讯流 | `Stream<T>` |
+| `stream.send(v)` | 发送值到流（可挂起） | `Unit` |
+| `stream.receive()` | 从流接收值（可挂起） | `T` |
+| `stream.close()` | 关闭流 | `Unit` |
+| `for item in stream { ... }` | 遍历流直到关闭 | — |
+| `delay(ms)` | 挂起指定毫秒 | `Unit` |
+| `withTimeout(ms) { ... }` | 超时控制 | `T` 或 `Err(TimeoutError)` |
+
+### 16.15 设计决策
+
+1. **无 `suspend` 关键字**：减少关键字和标注负担。所有函数编译时生成挂起点元数据，运行时自动处理。
+2. **无 `await` 关键字**：`coroutineScope` 自动收拢结果，消除逐个等待的模板代码。协程间依赖通过 `Stream` 通讯解决。
+3. **无 `async` / `Deferred`**：`launch` + `Task<T>` 统一了 Kotlin 中 `launch`→`Job` 和 `async`→`Deferred` 的分裂设计。
+4. **无 `Channel` 类型**：`Stream<T>` 更简洁，消费端复用 `for ... in` 语法，与遍历列表一致。
+5. **编译时类型安全**：`coroutineScope` 配合元组解构在编译时确定每个位置的结果类型，无运行时 `as` 转型。循环场景自动退化为同质列表。
+6. **错误复用**：子协程的错误通过 `Result<T, E>` 传播，不引入异常机制。
+7. **快速失败**：任意子协程失败立即取消其余，避免资源浪费和竞态条件。
+8. **调度器正交**：默认单线程事件循环保证无数据竞争；`.io` 提供优先级调度；`.cpu` 按需卸载到线程池。
+
+---
+
+## 十七、工具链
+
+### 17.1 编译器
+
+```
+atomc — Atomic 编译器
+
+Usage:
+  atomc [options] <source>
+
+Options:
+  -o <file>       输出文件路径
+  --emit <type>   输出类型：ir, bc, asm, obj, exe
+  --opt <level>   优化级别：0, 1, 2, 3
+  --target <t>    目标平台：native, wasm
+  -I <dir>        添加 include 路径
+  -L <dir>        添加 library 路径
+  -l <lib>        链接库
+  --check         仅类型检查，不生成代码
+  --explain       详细错误解释
+  --version       显示版本
+  --help          显示帮助
+```
+
+### 17.2 构建工具
+
+```
+atom — 项目构建与包管理
+
+Commands:
+  atom new <name>       创建新项目
+  atom build            构建项目
+  atom run              构建并运行
+  atom test             运行测试
+  atom repl             启动 REPL
+  atom add <pkg>        添加依赖
+  atom remove <pkg>     移除依赖
+  atom update           更新依赖
+  atom fmt              格式化代码
+  atom doc              生成文档
+  atom clean            清理构建产物
+```
+
+### 17.3 REPL
+
+```kotlin
+$ atom repl
+Atomic 1.0.0 REPL
+Type :help for commands, :quit to exit
+
+> val x = 10
+> x * 2
+20
+> List[1, 2, 3].map { it * it }
+List[1, 4, 9]
+> for x in 1..5 { x * x }
+List[1, 4, 9, 16, 25]
+> :type List[1, 2, 3]
+List<Int>
+> :quit
+```
+
+### 17.4 代码格式化
+
+`atom fmt` 提供标准格式化，无配置选项（类似 gofmt）。
+
+### 17.5 文档生成
+
+`///` 和 `/** */` 文档注释由 `atom doc` 生成 HTML 文档。
+
+---
+
+## 十八、形式化语法（EBNF）
+
+### 18.1 顶层结构
+
+```ebnf
+program        ::= (declaration | statement)*
+
+declaration    ::= function_decl
+                 | enum_decl
+                 | type_alias
+                 | module_decl
+                 | external_decl
+                 | const_decl
+
+const_decl     ::= 'const' identifier (':' type)? '=' expression
+```
+
+### 18.2 模块
+
+```ebnf
+module_decl    ::= 'module' identifier '{' (export_decl | declaration)* '}'
+
+export_decl    ::= 'export' declaration
+                 | 'export' '{' declaration* '}'
+```
+
+### 18.3 类型
+
+```ebnf
+type           ::= type_primary ('->' type)*
+
+type_primary   ::= 'Int' | 'Float' | 'Bool' | 'Char' | 'String' | 'Unit'
+                 | 'Date' | 'DateTime' | 'Random'
+                 | 'List' '<' type '>'
+                 | 'Map' '<' type ',' type '>'
+                 | 'Set' '<' type '>'
+                 | 'Option' '<' type '>'
+                 | 'Result' '<' type ',' type '>'
+                 | 'Task' '<' type '>'
+                 | 'Stream' '<' type '>'
+                 | 'LazyList' '<' type '>'
+                 | '(' type (',' type)* ')'
+                 | '{' (identifier ':' type (',' identifier ':' type)*)? '}'
+                 | identifier generic_args?
+
+generic_args   ::= '<' type (',' type)* '>'
+
+type_alias     ::= 'type' identifier generic_params? '=' type
+
+generic_params ::= '<' identifier (',' identifier)* '>'
+```
+
+### 18.4 枚举
+
+```ebnf
+enum_decl      ::= 'enum' identifier generic_params? '{' variant (',' variant)* ','? '}'
+
+variant        ::= identifier ('(' (parameter (',' parameter)*)? ')')?
+
+parameter      ::= identifier ':' type
+```
+
+### 18.5 函数
+
+```ebnf
+function_decl  ::= 'fun' identifier generic_params? '(' parameters? ')'
+                   (':' type)? function_body
+
+parameters     ::= parameter (',' parameter)*
+function_body  ::= '=' expression       // 单表达式体
+                 | block                // 块体
+
+external_decl  ::= 'external' 'fun' identifier '(' parameters? ')' (':' type)?
+
+lambda         ::= 'fun' '(' parameters? ')' (':' type)? function_body
+                 | '{' (lambda_params '->')? expressions '}'
+
+lambda_params  ::= identifier (',' identifier)*
+```
+
+### 18.6 语句与表达式
+
+```ebnf
+statement      ::= expression
+                 | binding
+                 | assignment
+                 | return_stmt
+                 | break_stmt
+                 | continue_stmt
+
+expressions    ::= expression (';' expression)*
+
+expression     ::= assignment_expr
+assignment_expr::= when_expr
+                 | binding
+                 | identifier compound_assign expression
+                 | identifier '=' expression
+
+compound_assign::= '+=' | '-=' | '*=' | '/=' | '%='
+
+when_expr      ::= 'when' when_condition '{' expression 'else' expression '}'
+                 | 'when' when_condition '{' when_arms '}'
+                 | 'when' '{' when_arms '}'
+
+when_condition ::= expression
+                 | expression 'when' expression
+
+when_arms      ::= when_arm (',' when_arm)* ','?
+when_arm       ::= pattern ('and' expression)? '->' expressions
+                 // 'and' 将模式与布尔条件合并，无需嵌套 when：
+                 //   is Int and value > 0 -> ...
+                 //   Move(x, y) and x > 0 and y > 0 -> ...
+
+pattern        ::= literal_pattern
+                 | wildcard_pattern
+                 | variable_pattern
+                 | constructor_pattern
+                 | struct_pattern
+                 | tuple_pattern
+                 | list_pattern
+                 | range_pattern
+                 | type_pattern
+                 | or_pattern
+
+literal_pattern::= integer | float | string | 'true' | 'false' | char
+wildcard_pattern ::= '_'
+variable_pattern ::= identifier
+constructor_pattern ::= identifier ('(' pattern (',' pattern)* ')')?
+struct_pattern ::= '{' field_pattern (',' field_pattern)* '}'
+field_pattern  ::= identifier ('as' identifier)?
+                 | identifier '=' pattern
+tuple_pattern  ::= '(' pattern (',' pattern)* ')'
+list_pattern   ::= '[' pattern (',' pattern)* ']'
+                 | '[' pattern ',' '...' identifier? ']'
+range_pattern  ::= 'in' expression
+type_pattern   ::= 'is' identifier
+or_pattern     ::= pattern ('|' pattern)+
+                 | pattern ('or' pattern)+
+                 // 'or' 和 '|' 等价：0 or 1 or 2 等价于 0 | 1 | 2
+
+or_expr        ::= and_expr ('or' and_expr)*
+and_expr       ::= equality_expr ('and' equality_expr)*
+equality_expr  ::= comparison_expr (('==' | '!=') comparison_expr)*
+comparison_expr::= range_expr (('<' | '>' | '<=' | '>=' | 'is' | 'in') range_expr)*
+range_expr     ::= bitwise_expr ('..' | '..<' bitwise_expr)?
+bitwise_expr   ::= add_expr (('&' | '|' | '^') add_expr)*
+add_expr       ::= mul_expr (('+' | '-') mul_expr)*
+mul_expr       ::= unary_expr (('*' | '/' | '%') unary_expr)*
+unary_expr     ::= ('!' | '-' | '~')? pow_expr
+pow_expr       ::= postfix_expr ('**' unary_expr)?
+postfix_expr   ::= primary_expr postfix_op*
+postfix_op     ::= '.' identifier
+                 | '?.' identifier
+                 | '.' 'on' '(' dispatcher ')' block?
+                 | '[' expression ']'
+                 | '(' arguments? ')'
+                 | '?.' identifier '(' arguments? ')'
+
+dispatcher     ::= '.io' | '.cpu'
+
+primary_expr   ::= integer | float | string | char | 'true' | 'false'
+                 | identifier
+                 | tuple_literal
+                 | list_literal
+                 | map_literal
+                 | set_literal
+                 | struct_literal
+                 | lambda
+                 | '::' identifier ('.' identifier)*
+                 | for_expr
+                 | launch_expr
+                 | coroutine_scope_expr
+                 | stream_expr
+                 | lazyList_expr
+                 | block
+                 | '(' expression ')'
+
+tuple_literal  ::= '(' (named_arg (',' named_arg)*)? ')'
+named_arg      ::= (identifier ':')? expression
+
+list_literal   ::= 'List' '[' (expression (',' expression)*)? ']'
+map_literal    ::= 'Map' '[' (expression ':' expression (',' expression ':' expression)*)? ']'
+set_literal    ::= 'Set' '[' (expression (',' expression)*)? ']'
+struct_literal ::= '{' (field_init (',' field_init)*)? '}'
+field_init     ::= identifier ('=' expression)?
+
+for_expr       ::= 'for' for_source (',' for_source)* block
+for_source     ::= identifier? 'in' expression
+                 | expression              // 条件循环
+
+launch_expr    ::= 'launch' '(' dispatcher? ')'? block
+
+coroutine_scope_expr ::= 'coroutineScope' block
+
+stream_expr    ::= 'stream' '<' type '>' '(' ')'
+
+lazyList_expr ::= 'lazyList' '(' expression ')' '{' lambda_params '->' expressions '}'
+
+block          ::= '{' (statement ';'?)* '}'
+
+arguments      ::= positional_arg (',' positional_arg)* (',' lambda)?
+                 | lambda
+positional_arg ::= expression
+                 | identifier '=' expression
+
+binding        ::= 'lazy'? ('val' | 'var') '?'? pattern (':' type)? '=' expression
+
+return_stmt    ::= 'return' expression?
+break_stmt     ::= 'break'
+continue_stmt  ::= 'continue'
+```
+
+### 18.7 扩展函数
+
+```ebnf
+extension_decl ::= 'extension' type '{' function_decl* '}'
+```
+
+---
+
+## 十九、错误信息设计
+
+### 19.1 错误格式
+
+```
+Error at file:main.atom, line:5, col:8:
+    val x: Int = 10 + "hello"
+                     ^
+Type mismatch: expected Int, found String
+Help: use toInt("hello") to convert String to Int
+```
+
+### 19.2 错误分类
+
+| 类别 | 阶段 | 示例 |
+|------|------|------|
+| 词法错误 | Lexer | 非法的字符、未闭合的字符串 |
+| 语法错误 | Parser | 缺少分号、不匹配的括号 |
+| 类型错误 | Type Check | 类型不匹配、非穷尽匹配 |
+| 作用域错误 | Name Res | 未定义变量、重复定义 |
+| 运行时错误 | Runtime | 除零、下标越界、panic |
+
+### 19.3 友好性要求
+
+- 精确位置（文件、行、列）
+- 相关代码片段
+- 简明错误描述
+- 修复建议（Help / Hint）
+- 错误码用于搜索
+- 多行错误的 span 标注
+
+---
+
+## 二十、实现路线图
+
+### Phase 1：MVP（最小可行解释器）
+
+- [ ] 词法分析（Lexer）
+- [ ] 语法分析（Parser）
+- [ ] 基本类型（Int, Float, Bool, String）
+- [ ] 变量绑定（val / var）
+- [ ] 运算符（算术、比较、逻辑）
+- [ ] 函数定义与调用（fun）
+- [ ] when 二分支（{ a else b } 语法）
+- [ ] for 循环（遍历集合、条件循环）
+- [ ] print / println / readLine
+- [ ] 字符串插值
+- [ ] 树遍历解释器（AST Walker）
+
+### Phase 2：函数式核心
+
+- [ ] 匿名函数（`{ it * 2 }` 语法）
+- [ ] 高阶函数（函数作为参数/返回值）
+- [ ] Lambda 外提语法糖
+- [ ] 闭包
+- [ ] `::` 函数引用
+- [ ] 列表（List\<T\>）完整实现
+- [ ] map / filter / fold 等标准库函数
+- [ ] for 表达式（列表生成）
+- [ ] extension 块
+- [ ] REPL
+
+### Phase 3：类型系统
+
+- [ ] 静态类型检查器
+- [ ] 类型推断（Hindley-Milner 风格）
+- [ ] 函数类型 `(A) -> B`
+- [ ] 结构体（`{x: Int, y: Int}`）
+- [ ] 枚举（enum / ADT）
+- [ ] 泛型（`<T>`）
+- [ ] when 多分支（值匹配、条件链）
+- [ ] 类型匹配（is）
+- [ ] 模式匹配（枚举解构、元组解构）
+- [ ] 范围匹配（in）
+- [ ] 穷尽性检查
+- [ ] Map\<K,V\>, Set\<T\>, Range 类型
+
+### Phase 4：错误处理与空安全
+
+- [ ] Option\<T\> 类型（enum）
+- [ ] Result\<T, E\> 类型（enum）
+- [ ] `val x?` / `var x?` 错误传播语法
+- [ ] `?.` 安全调用链
+- [ ] 标准库 map / flatMap / orElse / unwrapOr
+
+### Phase 5：工程化
+
+- [ ] 模块系统（module / import / export）
+- [ ] 项目配置文件 atom.toml
+- [ ] 包管理基础（atom add / remove）
+- [ ] 错误信息优化（友好提示 + 修复建议）
+- [ ] 代码格式化（atom fmt）
+- [ ] 文档生成（atom doc）
+- [ ] 测试框架
+
+### Phase 6：代码生成
+
+- [ ] IR 中间表示设计
+- [ ] 基本优化遍（常量折叠、死代码消除、内联）
+- [ ] TCO 实现
+- [ ] 目标代码生成（LLVM 后端或自定义）
+- [ ] WASM 目标支持
+
+### Phase 7：内存管理
+
+- [ ] 引用计数 GC 实现
+- [ ] 循环检测器
+- [ ] 基准测试与调优
+
+### Phase 8：协程
+
+- [ ] 事件循环运行时（单线程 + I/O 多路复用）
+- [ ] `launch` / `coroutineScope` 实现
+- [ ] `delay` / `withTimeout` 实现
+- [ ] 调度器分发（`.io` / `.cpu`）
+- [ ] `Stream<T>` 流式通讯
+- [ ] 协作式取消机制
+- [ ] 协程状态管理与调试支持
+
+### Phase 9：标准库完善
+
+- [ ] 日期时间库（`Date`, `DateTime`, `now`, `today` 等）
+- [ ] 随机数库（`randInt`, `randFloat`, `Random` 等）
+
+### Phase 10：生产就绪
+
+- [ ] FFI（C 互操作）
+- [ ] 调试器支持
+- [ ] LSP 服务器
+- [ ] 编译器自举（用 Atomic 写 Atomic 编译器）
+- [ ] 包注册中心上线
+
+---
+
+## 二十一、完整示例
+
+### 示例 1：FizzBuzz
+
+```kotlin
+fun fizzbuzz(n: Int): String {
+    return when (n % 3, n % 5) {
+        (0, 0) -> "FizzBuzz"
+        (0, _) -> "Fizz"
+        (_, 0) -> "Buzz"
+        else -> n.toString()
+    }
+}
+
+fun main() {
+    for i in 1..100 {
+        println(fizzbuzz(i))
+    }
+}
+```
+
+### 示例 2：枚举定义与扩展
+
+```kotlin
+enum Shape {
+    Circle(r: Float)
+    Rectangle(w: Float, h: Float)
+    Square(s: Float)
+}
+
+extension Shape {
+    fun area(): Float {
+        return when it {
+            Circle(r) -> pi * r * r
+            Rectangle(w, h) -> w * h
+            Square(s) -> s * s
+        }
+    }
+
+    fun perimeter(): Float {
+        return when it {
+            Circle(r) -> 2.0 * pi * r
+            Rectangle(w, h) -> 2.0 * (w + h)
+            Square(s) -> 4.0 * s
+        }
+    }
+
+    fun isRound(): Bool {
+        return when it {
+            Circle(_) -> true
+            else -> false
+        }
+    }
+}
+
+val shapes = [Circle(5.0), Rectangle(3.0, 4.0), Square(2.0)]
+for shape in shapes {
+    println("Area: " + shape.area().toString() +
+            ", Round: " + shape.isRound().toString())
+}
+```
+
+### 示例 3：数据转换（带错误处理）
+
+```kotlin
+type Person = {name: String, age: Int}
+
+enum ValidationError {
+    InvalidAge
+    NameTooShort
+}
+
+fun validateUser(user: Person): Result<Person, ValidationError> {
+    return when {
+        user.age < 0 or user.age > 150 -> Err(InvalidAge)
+        user.name.len() < 2 -> Err(NameTooShort)
+        else -> Ok(user)
+    }
+}
+
+fun formatName(user: Person): String {
+    return user.name + " (" + user.age.toString() + ")"
+}
+
+val users = [
+    {name = "张三", age = 25},
+    {name = "李", age = 200},
+    {name = "王五", age = 30},
+]
+
+val validAdultNames = users
+    .filter { it.age >= 18 }
+    .map(::validateUser)
+    .filter { when it { Ok(_) -> true else -> false } }
+    .map { when it { Ok(u) -> formatName(u) else -> "" } }
+    .filter { it != "" }
+
+for name in validAdultNames {
+    println(name)
+}
+```
+
+### 示例 4：递归（依赖 TCO）
+
+```kotlin
+// 尾递归求和，TCO 保证不爆栈
+fun sum(n: Int, acc: Int): Int {
+    return when n == 0 { acc else sum(n - 1, acc + n) }
+}
+
+val total = sum(1_000_000, 0)
+println(total)    // 500000500000
+```
+
+### 示例 5：链式调用
+
+```kotlin
+// 普通链式
+val result  = List[1, 2, 3, 4, 5]
+    .filter { it % 2 == 0 }
+    .map { it * it }
+    .fold(0) { acc, x -> acc + x }
+
+// 安全调用链式（错误传播）
+val safeResult = parseInt("123")
+    ?.map { it * 2 }
+    ?.toString()
+    ?.orElse("default")
+```
+
+### 示例 6：高阶函数
+
+```kotlin
+// 函数作为参数
+fun applyTwice(f: (Int) -> Int, x: Int): Int {
+    return f(f(x))
+}
+
+val result = applyTwice({ it * 2 }, 5)   // 20
+
+// 函数作为返回值
+fun makeCounter(): () -> Int {
+    var count = 0
+    return { count = count + 1; count }
+}
+
+val counter = makeCounter()
+counter()   // 1
+counter()   // 2
+counter()   // 3
+```
+
+### 示例 7：for 表达式
+
+```kotlin
+// 基本映射
+val squares = for x in List[1, 2, 3, 4, 5] { x * x }
+// → List[1, 4, 9, 16, 25]
+
+// 带过滤
+val evens = for x in List[1, 2, 3, 4, 5] {
+    when x % 2 == 0 { x * x else continue }
+}
+// → List[4, 16]
+
+// 多源（笛卡尔积）
+val pairs = for x in List[1, 2], y in List[3, 4] { (x, y) }
+// → List[(1, 3), (1, 4), (2, 3), (2, 4)]
+
+// 等价写法（链式调用）
+val sameList  = List[1, 2, 3, 4, 5].map { x -> x * x }
+```
+
+### 示例 8：Option 使用
+
+```kotlin
+fun findUser(id: Int): Option<User> {
+    return when users.containsKey(id) { Some(users[id]) else None }
+}
+
+// when 匹配式
+val userName = when findUser(123) {
+    Some(u) -> u.name
+    None -> "unknown"
+}
+
+// 安全调用式
+val city = findUser(123)
+    ?.address
+    ?.city
+    ?.orElse("no city")
+```
+
+### 示例 9：extension 扩展标准库
+
+```kotlin
+extension List<Int> {
+    fun sum(): Int {
+        return it.fold(0) { acc, x -> acc + x }
+    }
+
+    fun average(): Float {
+        return it.sum().toFloat() / it.len().toFloat()
+    }
+
+    fun median(): Float {
+        val sorted = it.sorted()
+        val mid = sorted.len() / 2
+        return when sorted.len() % 2 == 0 {
+            (sorted[mid - 1] + sorted[mid]).toFloat() / 2.0
+            else sorted[mid].toFloat()
+        }
+    }
+}
+
+val numbers  = List[1, 2, 3, 4, 5, 6]
+println(numbers.sum())      // 21
+println(numbers.average())  // 3.5
+println(numbers.median())   // 3.5
+```
+
+### 示例 10：树结构遍历
+
+```kotlin
+enum Tree<T> {
+    Leaf(T)
+    Node(left: Tree<T>, right: Tree<T>)
+}
+
+fun <T> depth(t: Tree<T>): Int {
+    return when t {
+        Leaf(_) -> 1
+        Node(l, r) -> 1 + max(depth(l), depth(r))
+    }
+}
+
+fun <T> flatten(t: Tree<T>): List<T> {
+    return when t {
+        Leaf(v) -> List[v]
+        Node(l, r) -> flatten(l) + flatten(r)
+    }
+}
+
+val tree = Node(
+    Node(Leaf(1), Leaf(2)),
+    Leaf(3)
+)
+
+println(depth(tree))      // 3
+println(flatten(tree))    // List[1, 2, 3]
+```
+
+### 示例 11：JSON 解析器骨架
+
+```kotlin
+enum JsonValue {
+    Null
+    Bool(b: Bool)
+    Num(n: Float)
+    Str(s: String)
+    Arr(items: List<JsonValue>)
+    Obj(fields: Map<String, JsonValue>)
+}
+
+extension JsonValue {
+    fun toString(): String {
+        return when it {
+            Null -> "null"
+            Bool(b) -> when b { "true" else "false" }
+            Num(n) -> n.toString()
+            Str(s) -> "\"" + s + "\""
+            Arr(items) -> "[" + items.map(JsonValue::toString).join(", ") + "]"
+            Obj(fields) -> "{" +
+                fields.entries()
+                    .map { (k, v) -> "\"" + k + "\": " + v.toString() }
+                    .join(", ") +
+                "}"
+        }
+    }
+
+    fun get(path: List<String>): Option<JsonValue> {
+        return when path {
+            [] -> Some(it)
+            [key, ...rest] -> when it {
+                Obj(fields) -> fields.get(key).flatMap { it.get(rest) }
+                else -> None
+            }
+        }
+    }
+}
+```
+
+### 示例 12：模块系统实战
+
+```kotlin
+// ---- math.atom ----
+module math {
+    export fun add(x: Int, y: Int): Int = x + y
+    export fun sub(x: Int, y: Int): Int = x - y
+
+    fun helper(): Int = 0   // 模块私有
+}
+
+// ---- main.atom ----
+import math.{add}
+
+fun main() {
+    val result = add(1, 2)
+    println(result)
+}
+```
+
+### 示例 13：协程并发
+
+```kotlin
+// 模拟 API 调用
+fun fetchUser(id: Int): User {
+    delay(100)
+    return {name = "User$id", age = 20 + id}
+}
+
+fun fetchPosts(id: Int): List<Post> {
+    delay(200)
+    return List[{title = "Post 1"}, {title = "Post 2"}]
+}
+
+fun fetchFriends(id: Int): List<User> {
+    delay(150)
+    return List[{name = "Friend1", age = 22}]
+}
+
+// 并发获取——总耗时 ≈ 100ms（而非 300ms）
+fun loadAllUsers(): List<User> {
+    return coroutineScope {
+        launch { fetchUser(1) }
+        launch { fetchUser(2) }
+        launch { fetchUser(3) }
+    }
+}
+
+// 异质结果——元组解构，编译时类型安全
+type Profile = {user: User, posts: List<Post>, friends: List<User>}
+
+fun loadProfile(id: Int): Profile {
+    val (user, posts, friends) = coroutineScope {
+        launch { fetchUser(id) }
+        launch { fetchPosts(id) }
+        launch { fetchFriends(id) }
+    }
+    return {user, posts, friends}
+}
+// user: User, posts: List<Post>, friends: List<User>（编译时确定）
+
+// Stream 管道——读取 → 解析 → 输出
+fun processData() {
+    coroutineScope {
+        val raw = stream<String>()
+        val parsed = stream<Int>()
+
+        launch {
+            for line in readLines("data.txt") {
+                raw.send(line)
+            }
+            raw.close()
+        }
+
+        launch {
+            for line in raw {
+                val num? = parseInt(line)
+                parsed.send(num)
+            }
+            parsed.close()
+        }
+
+        launch {
+            for num in parsed {
+                println(num)
+            }
+        }
+    }
+}
+
+// 超时控制
+fun safeLoad(ids: List<Int>): Result<List<User>, TimeoutError> {
+    return withTimeout(5000) {
+        coroutineScope {
+            for id in ids {
+                launch { fetchUser(id) }
+            }
+        }
+    }
+}
+```
+
+---
+
+## 附录 A：与其他语言对比
+
+| 特性 | Atomic | Rust | Kotlin | OCaml | Elm |
+|------|:--:|:--:|:--:|:--:|:--:|
+| 无 null | ✅ Option\<T\> | ✅ | ✅ | ✅ Option | ✅ Maybe |
+| 无异常 | ✅ Result\<T,E\> | ✅ | ❌ | ✅ | ✅ |
+| ADT | ✅ enum | ✅ enum | ✅ sealed | ✅ type | ✅ type |
+| 模式匹配 | ✅ when | ✅ match | ✅ when | ✅ match | ✅ case |
+| 类型推断 | ✅ 局部 | ✅ 局部 | ✅ 局部 | ✅ 全局 | ✅ 全局 |
+| 高阶函数 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 尾调用优化 | ✅ 保证 | ❌ 未保证 | ❌ | ✅ 保证 | ✅ 保证 |
+| 无类/对象 | ✅ | ❌ | ❌ | ✅ | ✅ |
+| UFCS | ✅ | ✅ 部分 | ❌ | ❌ | ❌ |
+| 不可变优先 | ✅ | ✅ | ❌ | ✅ | ✅ |
+| 无 while | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 无 if | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 内存管理 | RC+GC | 所有权 | JVM GC | GC | — (JS) |
+| 协程 | ✅ 结构化 | ❌ | ✅ suspend | ❌ (Lwt) | ❌ |
+
+## 附录 B：设计决策记录
+
+1. **`when` 替代 `if`**：减少关键字数量，所有分支逻辑统一在一个语法下
+2. **`for` 替代 `while`**：`for` + 条件表达式已覆盖所有循环场景
+3. **条件不加括号**：减少视觉噪音，与其他函数式语言（如 Elm, F#）一致
+4. **结构体 `=` 赋值、类型 `:` 标注**：语义区分：`=` 表示"赋值给"，`:` 表示"类型是"
+4b. **集合字面量 `Type[...]`**：`List[1,2,3]`/`Map["a":1]`/`Set[1,2,3]`。方括号统一关联集合操作，消除 `{}` 在块/结构体/集合间的歧义
+4c. **函数重载按参数类型区分**：同一作用域内允许同名函数按参数类型重载。返回类型不参与解析。存在歧义时编译错误，要求显式消歧。函数引用通过类型注解消歧
+5. **UFCS 统一调用**：`.` 是语法糖而非方法绑定，保持函数独立性
+6. **不可变默认**：`val` 为默认绑定，`var` 需显式标注，推动函数式风格
+7. **无 `null`**：`Option<T>` 在类型系统层面保证空安全
+8. **无异常**：`Result<T,E>` 使错误处理显式化，`?` 运算符简化传播
+9. **extension 仅为代码组织**：不引入方法/接收者概念，编译后等价于散落函数
+10. **RC + 循环检测**：比 stop-the-world GC 更可预测，适合非大规模并发的场景
+11. **文件扩展名 `.atom`**：与语言名称一致，便于识别
+12. **Bool 大写**：与其他类型名（Int, Float, String）保持一致的 PascalCase 命名
+12b. **`lazy val` 惰性求值**：首次访问时计算并缓存，与不可变语义一致。`LazyList<T>` 提供按需生成的序列，操作链不产生中间列表
+13. **无 `suspend` 关键字**：所有函数编译时自动生成挂起点元数据，不要求用户标注。降低学习成本和视觉噪音
+14. **无 `await` 关键字**：`coroutineScope` 自动收拢结果列表，消除逐个等待的模板代码
+15. **`launch` + `Task<T>` 统一**：不区分 `launch`→`Job` 和 `async`→`Deferred`，一种语法覆盖有返回值和无返回值协程
+16. **元组解构保证类型安全**：`val (a, b) = coroutineScope { ... }` 在编译时确定每个位置的类型，无运行时 `as` 转型。循环场景自动退化为同质列表
+17. **结构化并发**：`coroutineScope` 管理生命周期，不存在协程泄漏。作用域退出即保证所有子协程已结束
+18. **快速失败**：任意子协程失败立即取消其余，避免资源浪费和竞态条件
+19. **错误复用 `Result<T,E>`**：协程错误处理不引入异常和 try-catch，与现有错误处理机制完全正交
+20. **无 `Channel` 类型**：用 `Stream<T>` 替代，消费端复用 `for ... in` 语法，与遍历列表一致
+21. **调度器正交**：默认单线程事件循环无数据竞争；`.io` 提供优先级调度；`.cpu` 按需卸载到线程池
+
+---
+
+## 附录 C：关键语法速查表
+
+```kotlin
+// ---- 变量 ----
+val x = 10                    // 不可变
+var y = 20                    // 可变
+lazy val cfg = loadConfig()  // 惰性值（首次访问时计算并缓存）
+const PI = 3.14              // 编译时常量
+val a? = parseInt("123")    // 错误传播绑定
+
+// 惰性列表
+val nats = lazyList(0) { it + 1 }   // 0, 1, 2, 3, ...
+val evens = nats.filter { it % 2 == 0 }.take(10).toList()
+
+// ---- 元组 & to 中缀 ----
+val pair = 1 to "hello"              // (1, "hello")
+val triple = 1 to "hello" to true    // (1, "hello", true) — 自动展平
+val named = (name: "Alice", age: 30) // 命名元组
+val (a, b, c) = triple               // 元组解构
+
+// ---- 字符串 ----
+val msg = "Hello, ${name}"           // 插值（必须用 ${}）
+val json = """{"key": ${value}}"""   // 多行字符串
+
+// ---- 类型 ----
+type Point = {x: Int, y: Int}
+type Callback = (Int) -> String
+
+// ---- 枚举 ----
+enum Option<T> { Some(T), None }
+enum Result<T, E> { Ok(T), Err(E) }
+
+// ---- 函数 ----
+fun add(x: Int, y: Int): Int = x + y
+fun add(x: Float, y: Float): Float = x + y   // 重载
+val double = { x: Int -> x * 2 }
+val triple: (Int) -> Int = { it * 3 }
+fun main() { ... }            // 程序入口（无参数，返回 Unit）
+
+// ---- when 分支 ----
+val max = when a > b { a else b }              // 二分支
+val desc = when x { 0 -> "zero"; else -> "many" } // 多行
+val grade = when { score >= 90 -> "A"; else -> "F" } // 条件链
+val kind = when value { is Int -> "number"; is String -> "text" }  // 类型
+val area = when shape { Circle(r) -> pi*r*r; Rectangle(w,h) -> w*h } // 枚举
+
+// ---- for 循环 ----
+for item in list { println(item) }
+for i in 0..10 { println(i) }
+for i < 10 { i = i + 1 }     // 条件循环
+for { ... }                   // 无限循环
+val squares = for x in list { x * x }  // 列表生成
+
+// ---- 扩展 ----
+extension Shape {
+    fun area(): Float { ... }
+}
+
+// ---- 链式调用 ----
+List[1,2,3].filter { it > 1 }.map { it * 2 }
+parse("123")?.map { it * 2 }?.orElse(0)
+
+// ---- 错误处理 ----
+when result {
+    Ok(v) -> use(v)
+    Err(e) -> handle(e)
+}
+val value = result.unwrapOr(default)
+
+// ---- 日期时间 ----
+val now = now()
+val tomorrow = today().addDays(1)
+val dice = randInt(1, 6)
+
+// ---- 协程 ----
+launch { fetchUser(1) }                          // 启动协程（默认调度）
+launch(.io) { fetchUser(1) }                     // I/O 调度器
+data.on(.cpu) { heavyCompute(data) }             // CPU 调度器
+// 同质 → 列表
+val users = coroutineScope {                     // 并发作用域
+    launch { fetchUser(1) }
+    launch { fetchUser(2) }
+}                                                // users: List<User>
+
+// 异质 → 元组解构（编译时类型安全）
+val (user, posts) = coroutineScope {
+    launch { fetchUser(1) }
+    launch { fetchPosts(1) }
+}                                                // user: User, posts: List<Post>
+delay(1000)                                      // 挂起 1 秒
+val r = withTimeout(5000) { fetchUser(1) }       // 超时控制
+
+// Stream——协程间通讯
+val s = stream<Int>()
+launch { s.send(42); s.close() }
+launch { for v in s { println(v) } }
+```
+
+---
+
+> **文档维护者**：Atomic 语言设计团队
+> **最后更新**：2026-06-02
+> **版本**：6.0

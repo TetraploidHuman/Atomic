@@ -1,0 +1,34 @@
+// Safe field access and safe call examples
+enum Option { Some(Int), None }
+
+fun get_value(): Option {
+    Some(42)
+}
+
+fun no_value(): Option {
+    None
+}
+
+fun main() {
+    // Safe field access on Some variable
+    val p = Some(10)
+    val r1 = p?.length
+    when r1 {
+        Some(v) -> print(v)
+        None -> print(0)
+    }
+
+    // Safe call on Some function result
+    val r2 = get_value()?.length
+    when r2 {
+        Some(v) -> print(v)
+        None -> print(0)
+    }
+
+    // Safe call on None - should propagate None
+    val r3 = no_value()?.length
+    when r3 {
+        Some(v) -> print(v)
+        None -> print(9)
+    }
+}

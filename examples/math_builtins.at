@@ -1,0 +1,14 @@
+// Math built-in functions: abs, min, max
+fun main() {
+    print(abs(-42))     // 42
+    print(abs(0))       // 0
+    print(abs(99))      // 99
+
+    print(min(10, 20))  // 10
+    print(min(-5, -10)) // -10
+    print(min(7, 7))    // 7
+
+    print(max(10, 20))  // 20
+    print(max(-5, -10)) // -5
+    print(max(7, 7))    // 7
+}

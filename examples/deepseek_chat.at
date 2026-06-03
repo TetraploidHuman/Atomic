@@ -1,0 +1,59 @@
+// DeepSeek AI Chat
+
+fun main() {
+    println("=== DeepSeek AI Chat ===")
+    println("Type 'quit' to exit\n")
+
+    var msgs = ""
+    var running = true
+    for running {
+        print("You: ")
+        val input = unwrap_or(read_line(), "quit")
+        running = input != "quit"
+        msgs = when running { chatTurn(input, msgs) else msgs }
+    }
+    println("Goodbye!")
+}
+
+fun chatTurn(input: String, msgs: String): String = {
+    val withUser = addMsg(msgs, "user", input)
+    val reply = sendMsg(withUser)
+    println("AI: " + reply)
+    addMsg(withUser, "assistant", reply)
+}
+
+fun addMsg(msgs: String, role: String, content: String): String = {
+    val msg = "{\"role\":\"" + role + "\",\"content\":\"" + escape(content) + "\"}"
+    when msgs == "" { msg else msgs + "," + msg }
+}
+
+fun escape(s: String): String =
+    replace(replace(replace(replace(replace(
+        s, "\\", "\\\\"), "\"", "\\\""), "\n", "\\n"), "\r", "\\r"), "\t", "\\t")
+
+fun sendMsg(msgs: String): String {
+    val body = "{\"model\":\"deepseek-chat\",\"messages\":[" + msgs + "]}"
+    val headers = "Authorization: Bearer sk-83dcfb84f4e945df9dadf73257781119\nContent-Type: application/json"
+    val resp = httpRequest("POST", "https://api.deepseek.com/chat/completions", headers, body)
+    extractContent(resp)
+}
+
+fun extractContent(raw: String): String {
+    val brace = unwrap(index_of("{", raw))
+    val json = substring(raw, brace, len(raw) - brace)
+    val key = "\"content\":\""
+    val from = unwrap(index_of(key, json)) + len(key)
+    val end = findEndQuote(json, from)
+    when end >= 0 { substring(json, from, end - from) else raw }
+}
+
+fun findEndQuote(s: String, from: Int): Int {
+    var i = from
+    var found = -1
+    for i < len(s) and found == -1 {
+        val ch = substring(s, i, 1)
+        when ch == "\\" { i = i + 1 else when ch == "\"" { found = i else {} } }
+        i = i + 1
+    }
+    found
+}

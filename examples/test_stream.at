@@ -1,0 +1,11 @@
+fun main() {
+    val s = stream()
+    send(s, 42)
+    send(s, 99)
+    val v1 = receive(s)
+    print(v1)
+    val v2 = receive(s)
+    print(v2)
+    close(s)
+    print("done")
+}

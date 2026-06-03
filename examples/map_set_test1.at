@@ -1,0 +1,8 @@
+fun main() {
+    val m = Map["a": 1, "b": 2]
+    val k = map_keys(m)
+    print("keys len: ")
+    print(len(k))
+    println("")
+    println("done")
+}

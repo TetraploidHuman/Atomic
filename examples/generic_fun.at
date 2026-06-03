@@ -1,0 +1,26 @@
+// Test generic type parameters on functions
+
+fun <T> identity(x: T): T {
+    x
+}
+
+fun <T, U> pickFirst(a: T, b: U): T {
+    a
+}
+
+fun <T, U> pickSecond(a: T, b: U): U {
+    b
+}
+
+fun main() {
+    val a = identity(42)
+    println("identity(42): ${a}")
+
+    val b = pickFirst(10, 20)
+    println("pickFirst(10, 20): ${b}")
+
+    val c = pickSecond(99, 77)
+    println("pickSecond(99, 77): ${c}")
+
+    println("generic functions work!")
+}

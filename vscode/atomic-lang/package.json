@@ -1,0 +1,67 @@
+{
+  "name": "atomic-lang",
+  "displayName": "Atomic Language",
+  "description": "Syntax highlighting and language support for the Atomic programming language",
+  "version": "0.1.0",
+  "publisher": "atomic-lang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:atomic"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "atomic",
+        "aliases": ["Atomic", "atomic"],
+        "extensions": [".at", ".atom"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/atomic-icon.svg",
+          "dark": "./icons/atomic-icon.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "atomic",
+        "scopeName": "source.atomic",
+        "path": "./syntaxes/atomic.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Atomic Language",
+      "properties": {
+        "atomic.lsp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Atomic Language Server"
+        },
+        "atomic.lsp.path": {
+          "type": "string",
+          "default": "atomic-lsp",
+          "description": "Path to the Atomic LSP server binary"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  }
+}

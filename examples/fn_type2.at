@@ -1,0 +1,18 @@
+// Function types with lambdas
+fun map_int(f: (Int) -> Int, x: Int): Int {
+    f(x)
+}
+
+fun main() {
+    // Pass a named function
+    val r1 = map_int(double, 10)
+    print(r1)  // 20
+
+    // Pass a lambda directly
+    val r2 = map_int({ it * 3 }, 7)
+    print(r2)  // 21
+}
+
+fun double(n: Int): Int {
+    n * 2
+}

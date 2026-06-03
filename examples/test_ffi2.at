@@ -1,0 +1,17 @@
+// Test: FFI - External C function call + CString + unsafe
+external fun puts(s: CString): Int
+
+fun main() {
+    val msg = "Hello from Atomic FFI!"
+    val cstr = to_cstring(msg)
+    // Call external C puts() - this prints the string
+    val ret = puts(cstr)
+    println("puts returned:")
+    println(ret)
+
+    // Test from_cstring round-trip
+    val back = from_cstring(cstr)
+    println(back)
+
+    println("done")
+}

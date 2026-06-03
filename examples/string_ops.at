@@ -1,0 +1,36 @@
+// Test split, join, replace string functions
+fun main() {
+    // Test split
+    val parts = split("a,b,c", ",")
+    print("split count: ")
+    print(len(parts))
+    println("")
+
+    // Test join
+    val joined = join(parts, "-")
+    print("joined: ")
+    print(joined)
+    println("")
+
+    // Test replace
+    val replaced = replace("hello world hello", "hello", "hi")
+    print("replaced: ")
+    print(replaced)
+    println("")
+
+    // Test replace with empty from (should return copy)
+    val copied = replace("abc", "", "x")
+    print("copied: ")
+    print(copied)
+    println("")
+
+    // Test split with single char
+    val words = split("hello world", " ")
+    print("words count: ")
+    print(len(words))
+    print(" first: ")
+    print(words[0])
+    println("")
+
+    println("done")
+}

@@ -1,0 +1,16 @@
+// Test lazy_list constructor
+fun main() {
+    // Create a lazy list with seed value
+    val ll = lazy_list(42)
+    print("lazy_list created, len: ")
+    print(len(ll))
+    println("")
+
+    // Create another one
+    val ll2 = lazy_list(100)
+    print("second lazy_list len: ")
+    print(len(ll2))
+    println("")
+
+    println("done")
+}

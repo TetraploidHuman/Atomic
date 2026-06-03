@@ -1,0 +1,6 @@
+external fun atomic_test_ping(): Int
+
+fun main() {
+    print("ping: ")
+    println(atomic_test_ping())
+}

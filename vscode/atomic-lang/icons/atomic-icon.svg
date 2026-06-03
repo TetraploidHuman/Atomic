@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7C3AED"/>
+      <stop offset="100%" style="stop-color:#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <!-- Nucleus -->
+  <circle cx="64" cy="64" r="12" fill="url(#g)"/>
+  <!-- Electron orbits -->
+  <ellipse cx="64" cy="64" rx="52" ry="18" fill="none" stroke="#7C3AED" stroke-width="2.5" transform="rotate(0, 64, 64)" opacity="0.7"/>
+  <ellipse cx="64" cy="64" rx="52" ry="18" fill="none" stroke="#3B82F6" stroke-width="2.5" transform="rotate(60, 64, 64)" opacity="0.7"/>
+  <ellipse cx="64" cy="64" rx="52" ry="18" fill="none" stroke="#8B5CF6" stroke-width="2.5" transform="rotate(120, 64, 64)" opacity="0.7"/>
+  <!-- Electrons -->
+  <circle cx="116" cy="64" r="5" fill="#7C3AED"/>
+  <circle cx="38" cy="19" r="5" fill="#3B82F6"/>
+  <circle cx="38" cy="109" r="5" fill="#8B5CF6"/>
+</svg>

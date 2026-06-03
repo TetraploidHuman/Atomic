@@ -1,0 +1,77 @@
+// Test new list, map, set, and math builtins
+fun main() {
+    // Test flatten
+    val nested = List[List[1, 2], List[3, 4], List[5]]
+    val flat = flatten(nested)
+    print("flatten len: ")
+    print(len(flat))
+    println("")
+
+    // Test split_at
+    val xs = range(1, 7)
+    val parts = split_at(xs, 3)
+    print("split_at parts len: ")
+    print(len(parts))
+    println("")
+
+    // Test chunks
+    val ch = chunks(xs, 3)
+    print("chunks len: ")
+    print(len(ch))
+    println("")
+
+    // Test windows
+    val wins = windows(range(1, 4), 2)
+    print("windows len: ")
+    print(len(wins))
+    println("")
+
+    // Test sorted
+    val unsorted = List[3, 1, 4, 1, 5]
+    val s = sorted(unsorted)
+    print("sorted len: ")
+    print(len(s))
+    println("")
+
+    // Test unique
+    val dups = List[1, 2, 2, 3, 1]
+    val u = unique(dups)
+    print("unique len: ")
+    print(len(u))
+    println("")
+
+    // Test abs for float
+    print("abs(-3.5): ")
+    print(abs(-3.5))
+    println("")
+
+    // Test pow
+    print("pow(2.0, 3.0): ")
+    print(pow(2.0, 3.0))
+    println("")
+
+    // Test identity
+    print("identity: ")
+    print(identity(42))
+    println("")
+
+    // Test rand_shuffle
+    val shuffled = rand_shuffle(range(1, 4))
+    print("shuffled len: ")
+    print(len(shuffled))
+    println("")
+
+    // Test with_index
+    val wi = with_index(List[10, 20, 30])
+    print("with_index len: ")
+    print(len(wi))
+    println("")
+
+    // Test slice
+    val sl = slice(range(0, 10), 2, 5)
+    print("slice len: ")
+    print(len(sl))
+    println("")
+
+    println("done")
+}

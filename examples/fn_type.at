@@ -1,0 +1,14 @@
+// Function type examples
+// Higher-order function with typed parameter
+fun apply_twice(f: (Int) -> Int, x: Int): Int {
+    f(f(x))
+}
+
+fun double(n: Int): Int {
+    n * 2
+}
+
+fun main() {
+    val r = apply_twice(double, 5)
+    print(r)  // 20 = double(double(5))
+}

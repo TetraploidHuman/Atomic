@@ -1,0 +1,12 @@
+// Test: struct destructuring
+type Point = {x: Int, y: Int}
+
+fun main() {
+    val p = {x = 10, y = 20}
+    val {x, y} = p
+    print("x: ")
+    println(x)
+    print("y: ")
+    println(y)
+    println("done")
+}

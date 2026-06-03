@@ -1,0 +1,11 @@
+// Struct examples in Atomic
+type Point = {x: Int, y: Int}
+
+fun main() {
+    // Create a struct literal
+    val p = {x = 10, y = 20}
+
+    // Access struct fields
+    print(p.x)
+    print(p.y)
+}

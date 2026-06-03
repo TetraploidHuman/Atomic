@@ -1,0 +1,14 @@
+// Test Range API: contains, toList
+fun main() {
+    val r = 0..10
+    val contains5 = r.contains(5)
+    println("0..10.contains(5): ${contains5}")
+
+    val contains15 = r.contains(15)
+    println("0..10.contains(15): ${contains15}")
+
+    val list = r.toList()
+    println("0..10.toList().len: ${len(list)}")
+
+    println("Range API works")
+}

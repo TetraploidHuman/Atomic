@@ -1,0 +1,37 @@
+// Test Stream<T> and Task<T> builtins
+fun main() {
+    // --- Stream tests ---
+    val s = stream()
+    send(s, 42)
+    send(s, 99)
+    val v1 = receive(s)
+    print(v1)
+    val v2 = receive(s)
+    print(v2)
+    close(s)
+
+    // --- Task tests ---
+    val t = launch { 123 }
+    val done = is_done(t)
+    print(done)
+    val cancelled = is_cancelled(t)
+    print(cancelled)
+    val result = wait(t)
+    print(result)
+    cancel(t)
+
+    // --- UFCS Stream ---
+    val s2 = stream()
+    s2.send(7)
+    s2.send(8)
+    val r1 = s2.receive()
+    print(r1)
+    s2.close()
+
+    // --- UFCS Task ---
+    val t2 = launch { 456 }
+    print(t2.is_done())
+    print(t2.is_cancelled())
+    print(t2.wait())
+    t2.cancel()
+}

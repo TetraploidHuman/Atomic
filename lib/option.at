@@ -1,0 +1,27 @@
+// Standard library for Option<T>
+// Requires: enum Option<T> { Some(T), None }
+// Generic: functions work with any type via type erasure
+
+// map: transform the inner value if Some
+fun map(opt: Option, f): Option {
+    when opt {
+        Some(v) -> Some(f(v))
+        None -> None
+    }
+}
+
+// flatMap: chain Option-returning functions
+fun flatMap(opt: Option, f): Option {
+    when opt {
+        Some(v) -> f(v)
+        None -> None
+    }
+}
+
+// orElse: extract value or return default
+fun orElse(opt: Option, default) {
+    when opt {
+        Some(v) -> v
+        None -> default
+    }
+}
