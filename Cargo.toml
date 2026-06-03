@@ -16,7 +16,7 @@ path = "src/main.rs"
 required-features = ["inkwell"]
 
 [dependencies]
-inkwell = { version = "0.9", default-features = false, features = ["target-all"], optional = true }
+inkwell = { version = "0.9", default-features = false, features = ["target-x86", "target-arm", "target-aarch64", "target-webassembly"], optional = true }
 clap = { version = "4", features = ["derive"] }
 ariadne = "0.4"
 toml = "1.0"

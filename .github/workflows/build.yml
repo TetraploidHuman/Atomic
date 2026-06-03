@@ -129,22 +129,14 @@ jobs:
 
       - name: Build Windows binary
         run: |
-          # Create stub for libxml2s.lib (LLVM was compiled with it but it's not distributed)
+          # LLVM was compiled with libxml2; the lib isn't distributed so create a stub
           if (-not (Test-Path "C:\llvm\lib\libxml2s.lib")) {
-            Write-Host "Creating stub libxml2s.lib..."
             $libExe = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC" -Recurse -Filter "lib.exe" -Depth 6 -ErrorAction SilentlyContinue | Where-Object { $_.Directory.Name -eq "x64" -and $_.Directory.Parent.Name -eq "HostX64" } | Select-Object -First 1
             if (-not $libExe) { throw "Cannot find lib.exe" }
             "LIBRARY libxml2`nEXPORTS" | Out-File -Encoding ASCII C:\llvm\lib\libxml2s.def
             & $libExe.FullName /DEF:C:\llvm\lib\libxml2s.def /OUT:C:\llvm\lib\libxml2s.lib /MACHINE:X64
             Remove-Item C:\llvm\lib\libxml2s.def -Force
-            if (-not (Test-Path "C:\llvm\lib\libxml2s.lib")) { throw "Failed to create stub" }
           }
-
-          # Check which LLVM targets are actually available on this build
-          Write-Host "=== llvm-config --targets-built ==="
-          & C:\llvm\bin\llvm-config.exe --targets-built
-          Write-Host "=== LLVM target libs ==="
-          Get-ChildItem C:\llvm\lib\LLVM*.lib | Where-Object { $_.Name -match 'Target' -or $_.Name -match 'Asm' } | ForEach-Object { Write-Host "  $_" }
 
           cargo build --release --no-default-features --features codegen-windows
           Get-ChildItem target/release/atomic.exe
