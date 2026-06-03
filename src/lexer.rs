@@ -230,9 +230,12 @@ pub struct Lexer {
 #[allow(dead_code)]
 impl Lexer {
     pub fn new(source: &str) -> Self {
+        let chars: Vec<char> = source.chars().collect();
+        // Skip UTF-8 BOM (U+FEFF) if present at start of file
+        let pos = if chars.first() == Some(&'\u{FEFF}') { 1 } else { 0 };
         Lexer {
-            source: source.chars().collect(),
-            pos: 0,
+            source: chars,
+            pos,
             line: 1,
             col: 1,
         }

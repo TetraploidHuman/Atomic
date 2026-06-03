@@ -144,8 +144,13 @@ jobs:
       - name: Smoke test
         run: |
           # Test the binary can compile a simple program (LLVM bin is on GITHUB_PATH)
-          'fun main() { println("CI OK") }' | Out-File -Encoding UTF8 $env:TEMP\test.at
-          .\target\release\atomic.exe build --target native $env:TEMP\test.at --emit obj -o $env:TEMP\test.o
+          'fun main() { println("CI OK") }' | Set-Content -Path $env:TEMP\test.at -Encoding ASCII
+          $output = & .\target\release\atomic.exe build --target native $env:TEMP\test.at --emit obj -o $env:TEMP\test.o 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Compiler failed (exit $LASTEXITCODE): $output"
+            exit 1
+          }
+          Write-Host $output
           Write-Host "Windows binary OK"
 
       - name: Bundle DLL dependencies
