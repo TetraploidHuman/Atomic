@@ -18,8 +18,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run library tests
-        run: cargo test --lib
+      - name: Run library tests (no LLVM needed)
+        run: cargo test --lib --no-default-features
 
       - name: Build LSP server
         run: cargo build -p atomic-lsp --release
@@ -41,7 +41,7 @@ jobs:
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
           sudo add-apt-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_VERSION main"
           sudo apt-get update
-          sudo apt-get install -y llvm-$LLVM_VERSION-dev libclang-$LLVM_VERSION-dev lld-$LLVM_VERSION
+          sudo apt-get install -y llvm-$LLVM_VERSION-dev libclang-$LLVM_VERSION-dev lld-$LLVM_VERSION libpolly-$LLVM_VERSION-dev
           # Make llvm-config available unversioned
           sudo ln -sf /usr/bin/llvm-config-$LLVM_VERSION /usr/local/bin/llvm-config
           echo "LLVM_SYS_201_PREFIX=/usr/lib/llvm-$LLVM_VERSION" >> $GITHUB_ENV
