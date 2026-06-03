@@ -129,13 +129,8 @@ jobs:
 
       - name: Build Windows binary
         run: |
-          # LLVM was compiled with libxml2 but the .lib isn't distributed.
-          # Create a stub if missing (our compiler doesn't use XML features).
-          if (-not (Test-Path "C:\llvm\lib\libxml2s.lib")) {
-            Write-Host "Creating stub libxml2s.lib..."
-            lib /OUT:C:\llvm\lib\libxml2s.lib /MACHINE:X64
-          }
-          cargo build --release --no-default-features --features codegen-windows
+          # Dynamic linking against LLVM-C.dll avoids missing static deps (libxml2, etc.)
+          cargo build --release --no-default-features --features codegen-dynamic
           Get-ChildItem target/release/atomic.exe
 
       - name: Smoke test
