@@ -176,10 +176,20 @@ jobs:
           $testFile = "test.at"
           $out = & .\atomic-windows-x64-static.exe build --emit ir $testFile 2>&1
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "build failed (exit $LASTEXITCODE): $out"
+            Write-Error "build ir failed (exit $LASTEXITCODE): $out"
             exit 1
           }
           Write-Host "Build IR OK"
+
+      - name: Smoke test (build --emit bc)
+        run: |
+          $testFile = "test.at"
+          $out = & .\atomic-windows-x64-static.exe build --emit bc $testFile 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "build bc failed (exit $LASTEXITCODE): $out"
+            exit 1
+          }
+          Write-Host "Build BC OK"
 
       - name: Check DLL dependencies
         run: |

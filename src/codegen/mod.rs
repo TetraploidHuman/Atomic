@@ -903,7 +903,18 @@ impl<'ctx> CodeGen<'ctx> {
         Ok(())
     }
 
-    pub fn print_ir(&self) -> String { self.module.print_to_string().to_string() }
+    pub fn print_ir(&self) -> String {
+        // LLVMPrintModuleToString crashes on Windows (LLVM 20.x bug).
+        // Work around it by printing to a temp file and reading it back.
+        let tmp = std::env::temp_dir().join(format!("atomic_ir_{}.ll", std::process::id()));
+        self.module
+            .print_to_file(&tmp)
+            .unwrap_or_else(|e| panic!("Failed to print IR to {}: {}", tmp.display(), e));
+        let ir = std::fs::read_to_string(&tmp)
+            .unwrap_or_else(|e| panic!("Failed to read IR from {}: {}", tmp.display(), e));
+        let _ = std::fs::remove_file(&tmp);
+        ir
+    }
 
     pub fn verify(&self) -> Result<(), String> { self.module.verify().map_err(|e| e.to_string()) }
 
