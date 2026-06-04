@@ -932,22 +932,32 @@ impl<'ctx> CodeGen<'ctx> {
     fn emit_via_target_machine(&self, path: &std::path::Path, file_type: inkwell::targets::FileType) -> Result<(), String> {
         use inkwell::targets::{Target, TargetMachine, InitializationConfig};
         let triple_str = self.target_triple.as_deref().unwrap_or("native");
+        eprintln!("[DBG] tmc: triple={}", triple_str);
         let (target, cpu, features, target_triple) = match triple_str {
             "native" | "" => {
+                eprintln!("[DBG] tmc: native init");
                 Target::initialize_native(&InitializationConfig::default())
                     .map_err(|e| format!("Failed to initialize native target: {}", e))?;
+                eprintln!("[DBG] tmc: native init ok");
                 let tt = TargetMachine::get_default_triple();
+                eprintln!("[DBG] tmc: triple={}", tt.as_str().to_string_lossy());
                 let t = Target::from_triple(&tt)
                     .map_err(|e| format!("Failed to get target: {}", e))?;
+                eprintln!("[DBG] tmc: target ok");
                 // get_host_cpu_name/Features crash on Windows (LLVM 20.x bug).
                 // Use "generic" CPU — same as cross-compilation targets.
                 #[cfg(target_os = "windows")]
-                let (cpu, features) = ("generic".to_string(), String::new());
+                let (cpu, features) = {
+                    eprintln!("[DBG] tmc: using generic cpu (windows)");
+                    ("generic".to_string(), String::new())
+                };
                 #[cfg(not(target_os = "windows"))]
-                let (cpu, features) = (
-                    TargetMachine::get_host_cpu_name().to_string(),
-                    TargetMachine::get_host_cpu_features().to_string(),
-                );
+                let (cpu, features) = {
+                    eprintln!("[DBG] tmc: querying host cpu");
+                    (TargetMachine::get_host_cpu_name().to_string(),
+                     TargetMachine::get_host_cpu_features().to_string())
+                };
+                eprintln!("[DBG] tmc: cpu={}", cpu);
                 (t, cpu, features, tt)
             }
             "linux-x64" | "x86_64-unknown-linux-gnu" => {
@@ -997,6 +1007,7 @@ impl<'ctx> CodeGen<'ctx> {
             2 => inkwell::OptimizationLevel::Default,
             _ => inkwell::OptimizationLevel::Aggressive,
         };
+        eprintln!("[DBG] tmc: creating target machine");
         let target_machine = target.create_target_machine(
             &target_triple,
             &cpu,
@@ -1005,6 +1016,7 @@ impl<'ctx> CodeGen<'ctx> {
             inkwell::targets::RelocMode::Default,
             inkwell::targets::CodeModel::Default,
         ).ok_or_else(|| "Failed to create target machine".to_string())?;
+        eprintln!("[DBG] tmc: writing {:?}", file_type);
         target_machine.write_to_file(&self.module, file_type, path)
             .map_err(|e| format!("Failed to write to {}: {}", path.display(), e))
     }
