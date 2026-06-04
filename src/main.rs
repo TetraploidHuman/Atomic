@@ -853,49 +853,143 @@ fn emit_output(cg: &codegen::CodeGen, src_path: &Path, fmt: &str, target: &str) 
         }
         "asm" | "s" => {
             let out = src_path.with_extension("s");
-            cg.emit_assembly(&out)?;
+            #[cfg(target_os = "windows")]
+            {
+                emit_via_clang(cg, src_path, "asm", target)?;
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                cg.emit_assembly(&out)?;
+            }
             println!("Assembly written to: {}", out.display());
         }
         "obj" | "o" => {
             let out = src_path.with_extension("o");
-            cg.emit_object(&out)?;
+            #[cfg(target_os = "windows")]
+            {
+                emit_via_clang(cg, src_path, "obj", target)?;
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                cg.emit_object(&out)?;
+            }
             println!("Object file written to: {}", out.display());
         }
         "exe" => {
             if target == "wasm" || target == "wasm32-unknown-unknown" {
                 return Err("--emit exe is not supported for wasm target. Use --emit obj to produce a .wasm file.".to_string());
             }
-            let obj_path = src_path.with_extension("o");
-            cg.emit_object(&obj_path)?;
-            let exe_path = if target == "windows-x64" || target == "x86_64-pc-windows-gnu" {
-                src_path.with_extension("exe")
-            } else {
-                src_path.with_extension("")
-            };
-            let linker = match target {
-                "windows-x64" | "x86_64-pc-windows-gnu" => "x86_64-w64-mingw32-gcc",
-                "linux-arm64" | "aarch64-unknown-linux-gnu" => "aarch64-linux-gnu-gcc",
-                _ => "cc",
-            };
-            let mut cmd = std::process::Command::new(linker);
-            cmd.arg("-o").arg(&exe_path)
-               .arg(&obj_path)
-               .arg("-lm");  // LLVM generates calls to libm (pow, sqrt, etc.)
-            // NixOS / modern distros default to PIE; LLVM .o may be non-PIC.
-            if linker == "cc" {
-                cmd.arg("-no-pie");
+            #[cfg(target_os = "windows")]
+            {
+                emit_via_clang(cg, src_path, "exe", target)?;
             }
-            let status = cmd.status()
-                .map_err(|e| format!("Failed to invoke linker '{}': {}", linker, e))?;
-            if !status.success() {
-                return Err(format!("Linker '{}' failed", linker));
+            #[cfg(not(target_os = "windows"))]
+            {
+                let obj_path = src_path.with_extension("o");
+                cg.emit_object(&obj_path)?;
+                let exe_path = if target == "windows-x64" || target == "x86_64-pc-windows-gnu" {
+                    src_path.with_extension("exe")
+                } else {
+                    src_path.with_extension("")
+                };
+                let linker = match target {
+                    "windows-x64" | "x86_64-pc-windows-gnu" => "x86_64-w64-mingw32-gcc",
+                    "linux-arm64" | "aarch64-unknown-linux-gnu" => "aarch64-linux-gnu-gcc",
+                    _ => "cc",
+                };
+                let mut cmd = std::process::Command::new(linker);
+                cmd.arg("-o").arg(&exe_path)
+                   .arg(&obj_path)
+                   .arg("-lm");
+                if linker == "cc" {
+                    cmd.arg("-no-pie");
+                }
+                let status = cmd.status()
+                    .map_err(|e| format!("Failed to invoke linker '{}': {}", linker, e))?;
+                if !status.success() {
+                    return Err(format!("Linker '{}' failed", linker));
+                }
+                let _ = std::fs::remove_file(&obj_path);
+                println!("Executable written to: {}", exe_path.display());
             }
-            let _ = std::fs::remove_file(&obj_path);
-            println!("Executable written to: {}", exe_path.display());
         }
         other => return Err(format!("Unknown emit format: {}. Supported: ir, bc, asm, obj, exe", other)),
     }
     Ok(())
+}
+
+/// On Windows, bypass the LLVM C API target machine (which crashes non-deterministically)
+/// by writing LLVM IR to a temp file and compiling it with clang.
+#[cfg(target_os = "windows")]
+fn emit_via_clang(cg: &codegen::CodeGen, src_path: &Path, format: &str, _target: &str) -> Result<(), String> {
+    let ir = cg.print_ir();
+    let tmp_ll = std::env::temp_dir().join(format!("atomic_emit_{}.ll", std::process::id()));
+    std::fs::write(&tmp_ll, &ir)
+        .map_err(|e| format!("Failed to write IR to {}: {}", tmp_ll.display(), e))?;
+
+    let clang = find_clang()?;
+
+    let out_path = match format {
+        "asm" => src_path.with_extension("s"),
+        "obj" => src_path.with_extension("o"),
+        "exe" => src_path.with_extension("exe"),
+        _ => unreachable!(),
+    };
+
+    let mut cmd = std::process::Command::new(&clang);
+    match format {
+        "asm" => { cmd.arg("-S"); }
+        "obj" => { cmd.arg("-c"); }
+        "exe" => {}
+        _ => unreachable!(),
+    };
+    cmd.arg(&tmp_ll).arg("-o").arg(&out_path);
+
+    let output = cmd.output()
+        .map_err(|e| format!("Failed to run clang ({}): {}", clang, e))?;
+
+    let _ = std::fs::remove_file(&tmp_ll);
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("clang failed:\nstdout: {}\nstderr: {}", stdout, stderr));
+    }
+
+    let desc = match format {
+        "asm" => "Assembly",
+        "obj" => "Object file",
+        "exe" => "Executable",
+        _ => unreachable!(),
+    };
+    println!("{} written to: {}", desc, out_path.display());
+    Ok(())
+}
+
+/// Find clang.exe on Windows, first via LLVM_SYS_201_PREFIX, then PATH.
+#[cfg(target_os = "windows")]
+fn find_clang() -> Result<String, String> {
+    if let Ok(prefix) = std::env::var("LLVM_SYS_201_PREFIX") {
+        let clang_exe = Path::new(&prefix).join("bin").join("clang.exe");
+        if clang_exe.exists() {
+            return Ok(clang_exe.to_string_lossy().to_string());
+        }
+    }
+    // Try 'where clang' to search PATH
+    let output = std::process::Command::new("where")
+        .arg("clang.exe")
+        .output()
+        .map_err(|_| "Cannot find clang.exe. Ensure LLVM is installed and LLVM_SYS_201_PREFIX is set.".to_string())?;
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .next()
+            .ok_or("Cannot find clang.exe")?
+            .trim()
+            .to_string();
+        return Ok(path);
+    }
+    Err("Cannot find clang.exe. Install LLVM or set LLVM_SYS_201_PREFIX.".to_string())
 }
 
 fn check_file(path: &PathBuf, explain: bool) -> Result<(), Vec<CompilerError>> {
