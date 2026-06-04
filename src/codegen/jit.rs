@@ -9,7 +9,7 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn run_jit(&self) -> Result<(), String> {
         // Verify the module before JIT
-        if let Err(e) = self.module.verify() {
+        if let Err(e) = self.verify() {
             return Err(format!("LLVM module verification failed: {}", e));
         }
         let opt = match self.opt_level {
