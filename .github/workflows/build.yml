@@ -201,14 +201,25 @@ jobs:
           }
           Write-Host "Build BC OK"
 
-      - name: Smoke test (build --emit obj, debug)
+      - name: Smoke test (build --emit obj)
         run: |
           $testFile = "test.at"
           $out = & .\atomic-windows-x64-static.exe build --emit obj $testFile 2>&1
-          Write-Host "OBJ debug output: $out"
-          Write-Host "Exit code: $LASTEXITCODE"
-          # Known crash — continue for now
-        continue-on-error: true
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "build obj failed (exit $LASTEXITCODE): $out"
+            exit 1
+          }
+          Write-Host "Build OBJ OK"
+
+      - name: Smoke test (build --emit asm)
+        run: |
+          $testFile = "test.at"
+          $out = & .\atomic-windows-x64-static.exe build --emit asm $testFile 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "build asm failed (exit $LASTEXITCODE): $out"
+            exit 1
+          }
+          Write-Host "Build ASM OK"
 
       - name: Check DLL dependencies
         run: |
