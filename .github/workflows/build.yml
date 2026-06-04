@@ -92,7 +92,7 @@ jobs:
       - name: Install LLVM 20
         run: |
           $ErrorActionPreference = "Stop"
-          $llvmVersion = "20.1.8"
+          $llvmVersion = "20.1.0"
           $archiveName = "clang+llvm-$llvmVersion-x86_64-pc-windows-msvc"
           $archiveUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/$archiveName.tar.xz"
 
