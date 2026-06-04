@@ -151,20 +151,20 @@ jobs:
           LLVM_SYS_201_PREFIX: C:\llvm
         run: |
           cargo build --release --no-default-features --features codegen-static
-          Move-Item target/release/atomic.exe target/release/atomic-windows-x64-static.exe
-          Get-ChildItem target/release/atomic-windows-x64-static.exe
+          Move-Item target/release/atomic.exe atomic-windows-x64-static.exe
+          Get-ChildItem atomic-windows-x64-static.exe
 
       - name: Build LSP server (no LLVM needed)
         run: |
           cargo build -p atomic-lsp --release
-          Move-Item target/release/atomic-lsp.exe target/release/atomic-lsp-windows-x64.exe
-          Get-ChildItem target/release/atomic-lsp-windows-x64.exe
+          Move-Item target/release/atomic-lsp.exe atomic-lsp-windows-x64.exe
+          Get-ChildItem atomic-lsp-windows-x64.exe
 
       - name: Smoke test (static binary)
         run: |
           $testFile = "test.at"
           'fun main() { println("CI OK") }' | Set-Content -Path $testFile -Encoding ASCII
-          $out = & .\target\release\atomic-windows-x64-static.exe check $testFile 2>&1
+          $out = & .\atomic-windows-x64-static.exe check $testFile 2>&1
           if ($LASTEXITCODE -ne 0) {
             Write-Error "check failed (exit $LASTEXITCODE): $out"
             exit 1
@@ -177,7 +177,7 @@ jobs:
           $dumpbin = Get-ChildItem $vsDir -Recurse -Filter "dumpbin.exe" -Depth 6 -ErrorAction SilentlyContinue | Where-Object { $_.Directory.Name -eq "x64" -and $_.Directory.Parent.Name -eq "HostX64" } | Select-Object -First 1
           if ($dumpbin) {
             Write-Host "Static binary dependencies:"
-            & $dumpbin.FullName /dependents target\release\atomic-windows-x64-static.exe 2>&1 | Select-Object -First 20
+            & $dumpbin.FullName /dependents atomic-windows-x64-static.exe 2>&1 | Select-Object -First 20
           } else {
             Write-Host "dumpbin.exe not found, skipping dependency check"
           }
@@ -187,7 +187,7 @@ jobs:
           $distDir = "dist\atomic-windows-x64"
           New-Item -ItemType Directory -Force -Path "$distDir\bin"
           # Static binary (self-contained, no LLVM DLL needed)
-          Copy-Item "target\release\atomic-windows-x64-static.exe" "$distDir\bin\atomic.exe"
+          Copy-Item "atomic-windows-x64-static.exe" "$distDir\bin\atomic.exe"
           # Copy examples & stdlib
           Copy-Item -Recurse "examples" "$distDir\examples"
           Copy-Item -Recurse "stdlib" "$distDir\stdlib"
@@ -200,8 +200,8 @@ jobs:
         with:
           name: atomic-windows-x64
           path: |
-            target/release/atomic-windows-x64-static.exe
-            target/release/atomic-lsp-windows-x64.exe
+            atomic-windows-x64-static.exe
+            atomic-lsp-windows-x64.exe
             atomic-windows-x64.zip
 
   # ── GitHub Release (only on version tags) ──
