@@ -171,6 +171,16 @@ jobs:
           }
           Write-Host "Check OK"
 
+      - name: Smoke test (build, default .ll output)
+        run: |
+          $testFile = "test.at"
+          $out = & .\atomic-windows-x64-static.exe build $testFile 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "build failed (exit $LASTEXITCODE): $out"
+            exit 1
+          }
+          Write-Host "Build (default .ll) OK"
+
       - name: Smoke test (build --emit ir)
         run: |
           $testFile = "test.at"
@@ -190,6 +200,16 @@ jobs:
             exit 1
           }
           Write-Host "Build BC OK"
+
+      - name: Smoke test (build --emit obj)
+        run: |
+          $testFile = "test.at"
+          $out = & .\atomic-windows-x64-static.exe build --emit obj $testFile 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "build obj failed (exit $LASTEXITCODE): $out"
+            exit 1
+          }
+          Write-Host "Build OBJ OK"
 
       - name: Check DLL dependencies
         run: |

@@ -918,12 +918,13 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn verify(&self) -> Result<(), String> { self.module.verify().map_err(|e| e.to_string()) }
 
-    /// Write LLVM bitcode to a file
+    /// Write LLVM bitcode to a file.
+    /// Uses write_bitcode_to_memory + file write as a workaround for
+    /// write_bitcode_to_path crash on Windows (LLVM 20.x bug).
     pub fn emit_bitcode(&self, path: &std::path::Path) -> Result<(), String> {
-        if !self.module.write_bitcode_to_path(path) {
-            return Err(format!("Failed to write bitcode to {}", path.display()));
-        }
-        Ok(())
+        let buf = self.module.write_bitcode_to_memory();
+        std::fs::write(path, buf.as_slice())
+            .map_err(|e| format!("Failed to write bitcode to {}: {}", path.display(), e))
     }
 
     /// Write assembly or object file via target machine
