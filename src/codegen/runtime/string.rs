@@ -471,7 +471,8 @@ impl<'ctx> CodeGen<'ctx> {
         let rp_brsrc2 = unsafe { self.builder.build_gep(i8, rp_sdata, &[rp_blast2], "brsrc2").map_err(llvm_err) }?;
         let rp_brdst2 = unsafe { self.builder.build_gep(i8, rp_nbuf, &[rp_bwp2], "brdst2").map_err(llvm_err) }?;
         let _ = self.builder.build_call(self.module.get_function("memcpy").unwrap(), &[rp_brdst2.into(), rp_brsrc2.into(), rp_brem.into()], "").map_err(llvm_err)?;
-        let _rp_bnwp3 = self.builder.build_int_add(rp_bwp2, rp_brem, "bnwp3").map_err(llvm_err)?;
+        let rp_bnwp3 = self.builder.build_int_add(rp_bwp2, rp_brem, "bnwp3").map_err(llvm_err)?;
+        self.builder.build_store(rp_wpos, rp_bnwp3).map_err(llvm_err)?;
         let _ = self.builder.build_unconditional_branch(rp_bdone);
 
         self.builder.position_at_end(rp_bdone);

@@ -659,6 +659,9 @@ impl<'ctx> CodeGen<'ctx> {
             // divergent: branch already built by compile_expr, nothing more
         } else {
             let tv = self.compile_expr(then_expr)?;
+            // RC-inc: storing to result_alloca creates an additional reference
+            // that outlives the branch scope.
+            self.rc_inc_typed_value(&tv)?;
             self.store_value_to_alloca(&tv, result_alloca.unwrap())?;
             let _ = self.builder.build_unconditional_branch(merge_block);
         }
@@ -670,6 +673,7 @@ impl<'ctx> CodeGen<'ctx> {
             // divergent: branch already built by compile_expr, nothing more
         } else {
             let ev = self.compile_expr(else_expr)?;
+            self.rc_inc_typed_value(&ev)?;
             self.store_value_to_alloca(&ev, result_alloca.unwrap())?;
             let _ = self.builder.build_unconditional_branch(merge_block);
         }
