@@ -906,7 +906,7 @@ fn emit_output(cg: &codegen::CodeGen, src_path: &Path, fmt: &str, target: &str) 
 
 /// On Windows, emit asm or obj. Prefer clang if available (more stable on CI),
 /// otherwise fall back to built-in LLVM C API.
-fn emit_asm_or_obj(cg: &codegen::CodeGen, src_path: &Path, format: &str, out: &Path, _target: &str) -> Result<(), String> {
+fn emit_asm_or_obj(cg: &codegen::CodeGen, _src_path: &Path, format: &str, out: &Path, _target: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         if let Ok(clang) = find_clang() {
