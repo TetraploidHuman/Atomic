@@ -268,8 +268,11 @@ pub(super) struct TcoState<'ctx> {
 
 impl<'ctx> CodeGen<'ctx> {
     pub fn new(context: &'ctx Context, name: &str, registry: TypeRegistry, target_triple: Option<String>) -> Self {
+        eprintln!("[DEBUG] CodeGen::new: start");
         let module = context.create_module(name);
+        eprintln!("[DEBUG] CodeGen::new: module created");
         let builder = context.create_builder();
+        eprintln!("[DEBUG] CodeGen::new: builder created");
         // Named type to distinguish from anonymous {i64, i8*} enum types
         let string_type = context.opaque_struct_type("__atomic_str");
         string_type.set_body(
@@ -331,7 +334,8 @@ impl<'ctx> CodeGen<'ctx> {
             &[context.i64_type().into(), context.ptr_type(inkwell::AddressSpace::default()).into()],
             false,
         );
-        CodeGen {
+        eprintln!("[DEBUG] CodeGen::new: creating CodeGen struct");
+        let cg = CodeGen {
             context, module, builder, scope: Scope::new(),
             string_type, list_type, lambda_count: 0, str_pat_counter: 0,
             registry,
@@ -357,7 +361,9 @@ impl<'ctx> CodeGen<'ctx> {
             opt_level: 0,
             target_triple,
             wrapper_counter: 0,
-        }
+        };
+        eprintln!("[DEBUG] CodeGen::new: done");
+        cg
     }
 
     pub fn set_opt_level(&mut self, level: u8) {
@@ -726,7 +732,10 @@ impl<'ctx> CodeGen<'ctx> {
     // ---- Main entry ----
 
     pub fn compile(&mut self, program: &Program) -> Result<(), String> {
+        eprintln!("[DEBUG] compile: start, {} stmts", program.stmts.len());
+        eprintln!("[DEBUG] compile: calling define_runtime");
         self.define_runtime()?;
+        eprintln!("[DEBUG] compile: define_runtime done");
 
         // Pass 0: Register type definitions and create LLVM types
         for stmt in &program.stmts {

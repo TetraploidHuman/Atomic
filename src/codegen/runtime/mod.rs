@@ -15,6 +15,7 @@ use super::CodeGen;
 impl<'ctx> CodeGen<'ctx> {
     #[allow(unused_variables)]
     pub(super) fn define_runtime(&self) -> Result<(), String> {
+        eprintln!("[DEBUG] define_runtime: start");
         let i64 = self.i64_ty();
         let f64 = self.f64_ty();
         let void = self.void_ty();
@@ -23,9 +24,12 @@ impl<'ctx> CodeGen<'ctx> {
         let b1 = self.bool_ty();
         let i32 = self.context.i32_type();
         let i8 = self.context.i8_type();
+        eprintln!("[DEBUG] define_runtime: types created");
 
         // Declare external C functions
+        eprintln!("[DEBUG] define_runtime: declaring printf");
         let printf_fn = self.module.add_function("printf", i32.fn_type(&[ptr.into()], true), None);
+        eprintln!("[DEBUG] define_runtime: declaring malloc");
         let malloc_fn = self.module.add_function("malloc", ptr.fn_type(&[i64.into()], false), None);
         let realloc_fn = self.module.add_function("realloc", ptr.fn_type(&[ptr.into(), i64.into()], false), None);
         let free_fn = self.module.add_function("free", void.fn_type(&[ptr.into()], false), None);
@@ -213,6 +217,7 @@ impl<'ctx> CodeGen<'ctx> {
             self.builder.position_at_end(block);
         }
 
+        eprintln!("[DEBUG] define_runtime: done");
         Ok(())
     }
 

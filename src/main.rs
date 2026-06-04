@@ -808,20 +808,30 @@ fn run_file(path: &PathBuf, opt: u8, check: bool, emit: Option<String>, explain:
 }
 
 fn build_file(path: &PathBuf, output: Option<PathBuf>, opt: u8, emit: Option<String>, target: &str) -> Result<(), String> {
+    eprintln!("[DEBUG] build_file: start");
     let config = ProjectConfig::find_and_load(path);
     let opt = config.as_ref()
         .map(|c| c.effective_opt_level(opt))
         .unwrap_or(opt);
 
+    eprintln!("[DEBUG] build_file: loading program");
     let (program, registry) = load_program(path, false)
         .map_err(|errors| errors.iter().map(|e| e.to_string()).collect::<Vec<_>>().join("\n"))?;
+    eprintln!("[DEBUG] build_file: program loaded ({} stmts)", program.stmts.len());
 
+    eprintln!("[DEBUG] build_file: creating LLVM context");
     let context = Context::create();
+    eprintln!("[DEBUG] build_file: LLVM context created");
     let target_opt = if target == "native" { None } else { Some(target.to_string()) };
+    eprintln!("[DEBUG] build_file: creating CodeGen");
     let mut cg = codegen::CodeGen::new(&context, "main", registry, target_opt);
+    eprintln!("[DEBUG] build_file: CodeGen created");
     cg.set_opt_level(opt);
+    eprintln!("[DEBUG] build_file: calling cg.compile()");
     cg.compile(&program)?;
+    eprintln!("[DEBUG] build_file: cg.compile() done");
     cg.verify()?;
+    eprintln!("[DEBUG] build_file: verify done");
 
     if let Some(ref fmt) = emit {
         emit_output(&cg, path, fmt, target)?;

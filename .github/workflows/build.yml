@@ -92,7 +92,7 @@ jobs:
       - name: Install LLVM 20
         run: |
           $ErrorActionPreference = "Stop"
-          $llvmVersion = "20.1.0"
+          $llvmVersion = "20.1.8"
           $archiveName = "clang+llvm-$llvmVersion-x86_64-pc-windows-msvc"
           $archiveUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/$archiveName.tar.xz"
 
@@ -160,7 +160,7 @@ jobs:
           Move-Item target/release/atomic-lsp.exe atomic-lsp-windows-x64.exe
           Get-ChildItem atomic-lsp-windows-x64.exe
 
-      - name: Smoke test (static binary)
+      - name: Smoke test (check)
         run: |
           $testFile = "test.at"
           'fun main() { println("CI OK") }' | Set-Content -Path $testFile -Encoding ASCII
@@ -169,7 +169,17 @@ jobs:
             Write-Error "check failed (exit $LASTEXITCODE): $out"
             exit 1
           }
-          Write-Host "Static binary OK"
+          Write-Host "Check OK"
+
+      - name: Smoke test (build --emit ir)
+        run: |
+          $testFile = "test.at"
+          $out = & .\atomic-windows-x64-static.exe build --emit ir $testFile 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "build failed (exit $LASTEXITCODE): $out"
+            exit 1
+          }
+          Write-Host "Build IR OK"
 
       - name: Check DLL dependencies
         run: |
