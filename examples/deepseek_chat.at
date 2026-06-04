@@ -38,13 +38,25 @@ fun sendMsg(msgs: String): String {
     extractContent(resp)
 }
 
+// Extract content from JSON without using index_of/unwrap (has known bugs)
 fun extractContent(raw: String): String {
-    val brace = unwrap(index_of("{", raw))
-    val json = substring(raw, brace, len(raw) - brace)
-    val key = "\"content\":\""
-    val from = unwrap(index_of(key, json)) + len(key)
-    val end = findEndQuote(json, from)
-    when end >= 0 { substring(json, from, end - from) else raw }
+    val keyStart = findStr(raw, 0, "\"content\":\"")
+    val contentStart = keyStart + len("\"content\":\"")
+    val end = when keyStart >= 0 { findEndQuote(raw, contentStart) else -1 }
+    when keyStart >= 0 { when end >= 0 { substring(raw, contentStart, end - contentStart) else raw } else raw }
+}
+
+// Find pattern in s starting from startIndex, return index or -1
+fun findStr(s: String, startIndex: Int, pattern: String): Int {
+    val patLen = len(pattern)
+    val sLen = len(s)
+    var i = startIndex
+    var found = -1
+    for i + patLen <= sLen and found == -1 {
+        when substring(s, i, patLen) == pattern { found = i else {} }
+        i = i + 1
+    }
+    found
 }
 
 fun findEndQuote(s: String, from: Int): Int {

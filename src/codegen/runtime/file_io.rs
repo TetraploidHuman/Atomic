@@ -19,7 +19,7 @@ impl<'ctx> CodeGen<'ctx> {
         let entry = self.context.append_basic_block(rl_fn, "entry");
         self.builder.position_at_end(entry);
         let buf_size = i64.const_int(4096, false);
-        let buf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[buf_size.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let buf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[buf_size.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         // Use external stdin symbol (FILE* from libc, declared as external pointer)
         let stdin_g = self.module.add_global(ptr, None, "stdin");
         // Load the stdin FILE* pointer value from the external global
@@ -322,7 +322,7 @@ impl<'ctx> CodeGen<'ctx> {
         let _sub_zero_len = self.builder.build_int_compare(IntPredicate::EQ, sub_actual_len, i64.const_int(0, false), "zero_len").map_err(llvm_err)?;
         // Allocate and copy
         let sub_alc = self.builder.build_int_add(sub_actual_len, i64.const_int(1, false), "alc").map_err(llvm_err)?;
-        let sub_buf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[sub_alc.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let sub_buf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[sub_alc.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         let sub_src = unsafe { self.builder.build_gep(i8, sub_sdata, &[sub_clamped_start], "src").map_err(llvm_err) }?;
         let _ = self.builder.build_call(self.module.get_function("memcpy").unwrap(), &[sub_buf.into(), sub_src.into(), sub_actual_len.into()], "").map_err(llvm_err)?;
         let sub_null = unsafe { self.builder.build_gep(i8, sub_buf, &[sub_actual_len], "null").map_err(llvm_err) }?;
@@ -446,7 +446,7 @@ impl<'ctx> CodeGen<'ctx> {
         let _ = self.builder.build_call(self.module.get_function("fseek").unwrap(), &[rf_file.into(), i64.const_int(0, false).into(), i32.const_int(0, false).into()], "").map_err(llvm_err)?;
         // Allocate size+1, read, null-terminate
         let rf_alc = self.builder.build_int_add(rf_size, i64.const_int(1, false), "alc").map_err(llvm_err)?;
-        let rf_buf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[rf_alc.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let rf_buf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[rf_alc.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         let _ = self.builder.build_call(self.module.get_function("fread").unwrap(), &[rf_buf.into(), i64.const_int(1, false).into(), rf_size.into(), rf_file.into()], "").map_err(llvm_err)?;
         let rf_null_gep = unsafe { self.builder.build_gep(i8, rf_buf, &[rf_size], "null_gep").map_err(llvm_err) }?;
         self.builder.build_store(rf_null_gep, i8.const_int(0, false)).map_err(llvm_err)?;
@@ -599,7 +599,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.position_at_end(entry);
         let frl_handle = frl_fn.get_first_param().unwrap().into_pointer_value();
         let frl_buf_size = i64.const_int(4096, false);
-        let frl_buf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[frl_buf_size.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let frl_buf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[frl_buf_size.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         let frl_ret = self.builder.build_call(self.module.get_function("fgets").unwrap(), &[frl_buf.into(), i32.const_int(4096, false).into(), frl_handle.into()], "").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         // Check if fgets returned NULL (EOF/error)
         let frl_is_eof = self.builder.build_int_compare(IntPredicate::EQ, frl_ret, ptr.const_zero(), "is_eof").map_err(llvm_err)?;
@@ -642,7 +642,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.position_at_end(entry);
         let frb_handle = frb_fn.get_first_param().unwrap().into_pointer_value();
         let frb_size = frb_fn.get_nth_param(1).unwrap().into_int_value();
-        let frb_buf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[frb_size.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let frb_buf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[frb_size.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         let frb_read = self.builder.build_call(self.module.get_function("fread").unwrap(), &[frb_buf.into(), i64.const_int(1, false).into(), frb_size.into(), frb_handle.into()], "read").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_int_value();
         let frb_undef = frb_ret_ty.get_undef();
         let frb_r1 = self.builder.build_insert_value(frb_undef, frb_read, 0, "r_len").map_err(llvm_err)?;

@@ -19,12 +19,23 @@ impl<'ctx> CodeGen<'ctx> {
                 if let Expr::Ident(name) = func.as_ref() {
                     if name == "print" || name == "println" { return "Unit"; }
                     if self.registry.lookup_variant(name).is_some() { return "Enum"; }
-                    // Look up known functions that return String
-                    if name == "substring" || name == "unwrap_or" || name == "read_line"
-                        || name == "jsonEscape" || name == "handleChat" || name == "chatOnce"
-                        || name == "storeMessages" || name == "extractContent"
-                        || name == "httpRequest" || name == "str"
+                    // Look up function return type from LLVM module
+                    // User-defined functions are registered under their own name;
+                    // builtins use atomic_* prefixes
+                    let llvm_name = format!("atomic_string_{}", name);
+                    if let Some(f) = self.module.get_function(name)
+                        .or_else(|| self.module.get_function(&llvm_name))
                     {
+                        let ret_ty: BasicTypeEnum = f.get_type().get_return_type().unwrap_or_else(|| self.i64_ty().into());
+                        if ret_ty == self.string_type.into() {
+                            return "String";
+                        }
+                    }
+                    // Some builtins have other prefixes
+                    if name == "read_file" && self.module.get_function("atomic_read_file").is_some() {
+                        return "String";
+                    }
+                    if name == "httpRequest" && self.module.get_function("atomic_http_request").is_some() {
                         return "String";
                     }
                 }
@@ -48,6 +59,22 @@ impl<'ctx> CodeGen<'ctx> {
                     }
                 }
                 "Int"
+            }
+            Expr::When(w) => {
+                match &w.kind {
+                    WhenKind::OneLine { then_expr, else_expr, .. } => {
+                        let th = self.expr_type_hint(then_expr);
+                        if th != "Int" { return th; }
+                        self.expr_type_hint(else_expr)
+                    }
+                    WhenKind::ValueMatch { arms, .. } | WhenKind::ConditionChain { arms } => {
+                        if let Some(arm) = arms.first() {
+                            self.expr_type_hint(&arm.body)
+                        } else {
+                            "Int"
+                        }
+                    }
+                }
             }
             Expr::Binary(lhs, op, _) => {
                 if *op == BinaryOp::Add {

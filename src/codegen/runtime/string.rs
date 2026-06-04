@@ -71,11 +71,11 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.position_at_end(sp_cnt_done);
         let sp_final_cnt = self.builder.build_load(i64, sp_count, "final_cnt").map_err(llvm_err)?.into_int_value();
         let sp_cap = self.builder.build_int_add(sp_final_cnt, i64.const_int(1, false), "cap").map_err(llvm_err)?;
-        let _sp_cc = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[i64.const_int(8, false).into()], "list_alloc").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let _sp_cc = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[i64.const_int(8, false).into()], "list_alloc").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         // Use the inline list_create approach: allocate list + data in one go
         // Create data array: capacity * 32 bytes per entry (2 * i64 for fat struct)
         let sp_dsize = self.builder.build_int_mul(sp_cap, i64.const_int(16, false), "dsize").map_err(llvm_err)?;
-        let sp_data = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[sp_dsize.into()], "data").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let sp_data = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[sp_dsize.into()], "data").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         // List struct: {data_ptr, len:0, capacity}
         let sp_und = list_ty.get_undef();
         let sp_lr1 = self.builder.build_insert_value(sp_und, sp_data, 0, "lr1").map_err(llvm_err)?;
@@ -117,7 +117,7 @@ impl<'ctx> CodeGen<'ctx> {
         let sp_seg_len = self.builder.build_int_sub(sp_iv2, sp_last_v, "seg_len").map_err(llvm_err)?;
         // Create substring for this segment
         let sp_salc = self.builder.build_int_add(sp_seg_len, i64.const_int(1, false), "salc").map_err(llvm_err)?;
-        let sp_sbuf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[sp_salc.into()], "sbuf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let sp_sbuf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[sp_salc.into()], "sbuf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         let sp_ssrc = unsafe { self.builder.build_gep(i8, sp_sdata, &[sp_last_v], "ssrc").map_err(llvm_err) }?;
         let _ = self.builder.build_call(self.module.get_function("memcpy").unwrap(), &[sp_sbuf.into(), sp_ssrc.into(), sp_seg_len.into()], "").map_err(llvm_err)?;
         let sp_snull = unsafe { self.builder.build_gep(i8, sp_sbuf, &[sp_seg_len], "snull").map_err(llvm_err) }?;
@@ -172,7 +172,7 @@ impl<'ctx> CodeGen<'ctx> {
         let sp_last_v2 = self.builder.build_load(i64, sp_last, "last_v2").map_err(llvm_err)?.into_int_value();
         let sp_seg_len2 = self.builder.build_int_sub(sp_slen, sp_last_v2, "seg_len2").map_err(llvm_err)?;
         let sp_salc2 = self.builder.build_int_add(sp_seg_len2, i64.const_int(1, false), "salc2").map_err(llvm_err)?;
-        let sp_sbuf2 = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[sp_salc2.into()], "sbuf2").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let sp_sbuf2 = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[sp_salc2.into()], "sbuf2").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         let sp_ssrc2 = unsafe { self.builder.build_gep(i8, sp_sdata, &[sp_last_v2], "ssrc2").map_err(llvm_err) }?;
         let _ = self.builder.build_call(self.module.get_function("memcpy").unwrap(), &[sp_sbuf2.into(), sp_ssrc2.into(), sp_seg_len2.into()], "").map_err(llvm_err)?;
         let sp_snull2 = unsafe { self.builder.build_gep(i8, sp_sbuf2, &[sp_seg_len2], "snull2").map_err(llvm_err) }?;
@@ -262,7 +262,7 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.position_at_end(jn_after);
         let jn_final_total = self.builder.build_load(i64, jn_total, "final_total").map_err(llvm_err)?.into_int_value();
         let jn_jalc = self.builder.build_int_add(jn_final_total, i64.const_int(1, false), "jalc").map_err(llvm_err)?;
-        let jn_buf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[jn_jalc.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let jn_buf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[jn_jalc.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         // Reset i, reset write cursor
         let jn_wpos = self.builder.build_alloca(i64, "wpos").map_err(llvm_err)?;
         self.builder.build_store(jn_ji, i64.const_int(0, false)).map_err(llvm_err)?;
@@ -349,7 +349,7 @@ impl<'ctx> CodeGen<'ctx> {
         // Copy return: just duplicate the original string
         self.builder.position_at_end(rp_copy_ret);
         let rp_calc = self.builder.build_int_add(rp_slen, i64.const_int(1, false), "calc").map_err(llvm_err)?;
-        let rp_cbuf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[rp_calc.into()], "cbuf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let rp_cbuf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[rp_calc.into()], "cbuf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
         let _ = self.builder.build_call(self.module.get_function("memcpy").unwrap(), &[rp_cbuf.into(), rp_sdata.into(), rp_slen.into()], "").map_err(llvm_err)?;
         let rp_cnull = unsafe { self.builder.build_gep(i8, rp_cbuf, &[rp_slen], "cnull").map_err(llvm_err) }?;
         self.builder.build_store(rp_cnull, i8.const_int(0, false)).map_err(llvm_err)?;
@@ -409,7 +409,7 @@ impl<'ctx> CodeGen<'ctx> {
         let rp_extra = self.builder.build_int_mul(rp_fc, rp_diff, "extra").map_err(llvm_err)?;
         let rp_nlen = self.builder.build_int_add(rp_slen, rp_extra, "nlen").map_err(llvm_err)?;
         let rp_nalc = self.builder.build_int_add(rp_nlen, i64.const_int(1, false), "nalc").map_err(llvm_err)?;
-        let rp_nbuf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[rp_nalc.into()], "nbuf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
+        let rp_nbuf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[rp_nalc.into()], "nbuf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
 
         // Reset scan
         self.builder.build_store(rp_ri, i64.const_int(0, false)).map_err(llvm_err)?;
@@ -548,7 +548,7 @@ impl<'ctx> CodeGen<'ctx> {
         let sr_slen = self.builder.build_extract_value(sr_str, 0, "slen").map_err(llvm_err)?.into_int_value();
         let sr_sptr = self.builder.build_extract_value(sr_str, 1, "sptr").map_err(llvm_err)?.into_pointer_value();
         let sr_total = self.builder.build_int_mul(sr_slen, sr_n, "total").map_err(llvm_err)?;
-        let sr_buf = self.builder.build_call(self.module.get_function("malloc").unwrap(), &[sr_total.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().ok_or("malloc")?.into_pointer_value();
+        let sr_buf = self.builder.build_call(self.module.get_function("atomic_malloc_rc").unwrap(), &[sr_total.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().ok_or("malloc")?.into_pointer_value();
         // Loop: copy s into buffer n times
         let sr_loop_bb = self.context.append_basic_block(sr_fn, "sr_loop");
         let sr_done_bb = self.context.append_basic_block(sr_fn, "sr_done");

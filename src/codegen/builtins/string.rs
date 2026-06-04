@@ -370,7 +370,7 @@ impl<'ctx> CodeGen<'ctx> {
                 let nbytes = self.call_rt("atomic_utf8_byte_len", &[ch.into()])?.try_as_basic_value().basic().unwrap().into_int_value();
                 // Allocate nbytes+1 (for null terminator)
                 let alloc_sz = self.builder.build_int_add(nbytes, self.i64_ty().const_int(1, false), "alloc_sz").map_err(llvm_err)?;
-                let malloc_fn = self.module.get_function("malloc").unwrap();
+                let malloc_fn = self.module.get_function("atomic_malloc_rc").unwrap();
                 let buf = self.builder.build_call(malloc_fn, &[alloc_sz.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
                 // memcpy nbytes from sdata+real_idx to buf
                 let memcpy_fn = self.module.get_function("memcpy").unwrap();
@@ -415,7 +415,7 @@ impl<'ctx> CodeGen<'ctx> {
                 let i64 = self.i64_ty();
                 let i8 = self.context.i8_type();
                 // Allocate 5 bytes (max 4 byte UTF-8 + null terminator)
-                let malloc_fn = self.module.get_function("malloc").unwrap();
+                let malloc_fn = self.module.get_function("atomic_malloc_rc").unwrap();
                 let alloc_sz = i64.const_int(5, false);
                 let buf = self.builder.build_call(malloc_fn, &[alloc_sz.into()], "buf").map_err(llvm_err)?.try_as_basic_value().basic().unwrap().into_pointer_value();
                 // Call runtime UTF-8 encoder: nbytes = atomic_utf8_encode(code, buf)
