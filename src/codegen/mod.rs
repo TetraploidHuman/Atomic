@@ -932,15 +932,21 @@ impl<'ctx> CodeGen<'ctx> {
     fn emit_via_target_machine(&self, path: &std::path::Path, file_type: inkwell::targets::FileType) -> Result<(), String> {
         use inkwell::targets::{Target, TargetMachine, InitializationConfig};
         let triple_str = self.target_triple.as_deref().unwrap_or("native");
+        eprintln!("[DEBUG] emit_via_target_machine: triple_str={}", triple_str);
         let (target, cpu, features, target_triple) = match triple_str {
             "native" | "" => {
+                eprintln!("[DEBUG] emit_via_target_machine: calling initialize_native");
                 Target::initialize_native(&InitializationConfig::default())
                     .map_err(|e| format!("Failed to initialize native target: {}", e))?;
+                eprintln!("[DEBUG] emit_via_target_machine: initialize_native done");
                 let tt = TargetMachine::get_default_triple();
+                eprintln!("[DEBUG] emit_via_target_machine: default_triple={}", tt.as_str().to_string_lossy());
                 let t = Target::from_triple(&tt)
                     .map_err(|e| format!("Failed to get target: {}", e))?;
+                eprintln!("[DEBUG] emit_via_target_machine: target from triple done");
                 let cpu = TargetMachine::get_host_cpu_name().to_string();
                 let features = TargetMachine::get_host_cpu_features().to_string();
+                eprintln!("[DEBUG] emit_via_target_machine: cpu={}, features={}", cpu, features);
                 (t, cpu, features, tt)
             }
             "linux-x64" | "x86_64-unknown-linux-gnu" => {
@@ -990,6 +996,7 @@ impl<'ctx> CodeGen<'ctx> {
             2 => inkwell::OptimizationLevel::Default,
             _ => inkwell::OptimizationLevel::Aggressive,
         };
+        eprintln!("[DEBUG] emit_via_target_machine: creating target machine");
         let target_machine = target.create_target_machine(
             &target_triple,
             &cpu,
@@ -998,6 +1005,7 @@ impl<'ctx> CodeGen<'ctx> {
             inkwell::targets::RelocMode::Default,
             inkwell::targets::CodeModel::Default,
         ).ok_or_else(|| "Failed to create target machine".to_string())?;
+        eprintln!("[DEBUG] emit_via_target_machine: target machine created, writing to file");
         target_machine.write_to_file(&self.module, file_type, path)
             .map_err(|e| format!("Failed to write to {}: {}", path.display(), e))
     }

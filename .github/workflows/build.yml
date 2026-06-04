@@ -201,6 +201,15 @@ jobs:
           }
           Write-Host "Build BC OK"
 
+      - name: Smoke test (build --emit obj, debug)
+        run: |
+          $testFile = "test.at"
+          $out = & .\atomic-windows-x64-static.exe build --emit obj $testFile 2>&1
+          Write-Host "OBJ debug output: $out"
+          Write-Host "Exit code: $LASTEXITCODE"
+          # Known crash — continue for now
+        continue-on-error: true
+
       - name: Check DLL dependencies
         run: |
           $vsDir = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
