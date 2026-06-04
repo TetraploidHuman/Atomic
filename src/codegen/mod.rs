@@ -932,6 +932,7 @@ impl<'ctx> CodeGen<'ctx> {
     fn emit_via_target_machine(&self, path: &std::path::Path, file_type: inkwell::targets::FileType) -> Result<(), String> {
         use inkwell::targets::{Target, TargetMachine, InitializationConfig};
         let triple_str = self.target_triple.as_deref().unwrap_or("native");
+        eprintln!("[DBG] tmc enter: {}", triple_str);
         let (target, cpu, features, target_triple) = match triple_str {
             "native" | "" => {
                 Target::initialize_native(&InitializationConfig::default())
