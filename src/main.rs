@@ -808,46 +808,35 @@ fn run_file(path: &PathBuf, opt: u8, check: bool, emit: Option<String>, explain:
 }
 
 fn build_file(path: &PathBuf, output: Option<PathBuf>, opt: u8, emit: Option<String>, target: &str) -> Result<(), String> {
-    eprintln!("[DEBUG] build_file: start");
     let config = ProjectConfig::find_and_load(path);
     let opt = config.as_ref()
         .map(|c| c.effective_opt_level(opt))
         .unwrap_or(opt);
 
-    eprintln!("[DEBUG] build_file: loading program");
     let (program, registry) = load_program(path, false)
         .map_err(|errors| errors.iter().map(|e| e.to_string()).collect::<Vec<_>>().join("\n"))?;
-    eprintln!("[DEBUG] build_file: program loaded ({} stmts)", program.stmts.len());
 
-    eprintln!("[DEBUG] build_file: creating LLVM context");
     let context = Context::create();
-    eprintln!("[DEBUG] build_file: LLVM context created");
     let target_opt = if target == "native" { None } else { Some(target.to_string()) };
-    eprintln!("[DEBUG] build_file: creating CodeGen");
     let mut cg = codegen::CodeGen::new(&context, "main", registry, target_opt);
-    eprintln!("[DEBUG] build_file: CodeGen created");
     cg.set_opt_level(opt);
-    eprintln!("[DEBUG] build_file: calling cg.compile()");
     cg.compile(&program)?;
-    eprintln!("[DEBUG] build_file: cg.compile() done");
 
     // Emit output before verification — LLVM verify() can crash on Windows
     if let Some(ref fmt) = emit {
         emit_output(&cg, path, fmt, target)?;
     } else {
         let ir = cg.print_ir();
-        eprintln!("[DEBUG] build_file: IR printed");
         let out_path = output.unwrap_or_else(|| path.with_extension("ll"));
         fs::write(&out_path, ir)
             .map_err(|e| format!("Cannot write to '{}': {}", out_path.display(), e))?;
         println!("Compiled to: {}", out_path.display());
     }
 
-    // Verification is non-fatal — LLVM can crash on Windows during verify/print
+    // Verification is non-fatal — LLVM verify() is a no-op on Windows
     if let Err(e) = cg.verify() {
         eprintln!("Warning: LLVM module verification: {}", e);
     }
-    eprintln!("[DEBUG] build_file: done");
     Ok(())
 }
 
